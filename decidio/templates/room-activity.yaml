@@ -1,0 +1,34 @@
+# decidio project: what is happening in a room, from your own board's camera + mic.
+# Collect with the board, label with the browser tool or a teacher model, train.
+name: room-activity
+board: xiao_sense
+
+inputs:
+  image: {size: 96, color: gray, motion: true}
+  audio: {sample_rate: 16000, clip_seconds: 1.0, gain_db: 1.0}   # small gain jitter: noise_level depends on loudness
+
+model:
+  preset: small
+
+questions:
+  person_present:
+    type: noul
+    modality: image
+    instructions: "Is a person visible?"
+    criteria: {true: "a room with a person in it", false: "an empty room"}
+  activity:
+    type: choice
+    instructions: "What is happening in the room right now?"
+    criteria:
+      idle: "nothing notable is happening"
+      talking: "someone is speaking"
+      working: "someone is working, typing or handling objects"
+      alarm: "an alarm, siren or repeated beeping is sounding"
+  noise_level:
+    type: score
+    modality: audio
+    instructions: "How loud is the room?"
+    criteria: ["quiet", "moderate", "loud"]
+
+teacher:
+  task: "A camera frame (and the frame 200 ms earlier) plus one second of audio from a small sensor in a room."

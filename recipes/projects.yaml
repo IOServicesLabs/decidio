@@ -1,0 +1,99 @@
+# Recipes: ESP32 projects in general (ideas 72-76), sound-only ideas (98, 102, 103) and radio movement (81, 90).
+# Fields: see home.yaml.
+
+- id: wake-on-event
+  idea: 72
+  title: Wake something only when it matters
+  setup: The rules' pins wake a bigger computer, a recorder or a modem. This firmware keeps its own Wi-Fi on; a build that sleeps between events has not been made.
+  rules:
+    - {name: person, when: person_present = true, above: 0.8, for_ms: 300, hold_ms: 5000,
+       notify: {text: "Person seen", cooldown_s: 300}}
+    - {name: animal, when: animal_present = true, above: 0.8, for_ms: 300, hold_ms: 5000,
+       notify: {text: "Animal seen", cooldown_s: 300}}
+
+- id: trail-camera
+  idea: 73
+  title: Trail camera that keeps only the animal frames
+  setup: Camera on a tree or post. Each alert carries the frame the model saw (192x192). Photos leave the board with this recipe.
+  rules:
+    - {name: animal, when: animal_present = true, above: 0.8, for_ms: 300, hold_ms: 5000, count: daily,
+       notify: {text: "Animal on the trail camera", photo: true, cooldown_s: 60}}
+
+- id: occupancy-hvac
+  idea: 74
+  title: Room occupancy for heating and ventilation
+  setup: Camera looking at the room. On while people are seen and for 15 minutes after; give it a pin for the thermostat or fan. Minutes occupied come once a day.
+  rules:
+    - {name: occupied, when: person_present = true, above: 0.7, for_ms: 2000, hold_ms: 900000, count: daily, notify: false}
+
+- id: robot-follow-people
+  idea: 75
+  title: Robot that follows or avoids people
+  setup: Camera on the robot facing forwards. The rule follows the answer with no delay; read its pin or the event lines on the robot's controller.
+  rules:
+    - {name: person, when: person_present = true, above: 0.7, for_ms: 0, hold_ms: 300, notify: false}
+
+- id: reactive-toy
+  idea: 76
+  title: Toy that reacts to people, claps and voices
+  setup: Three rules, one pin each, for lights, a motor or a sound module.
+  rules:
+    - {name: person, when: person_present = true, above: 0.8, for_ms: 300, hold_ms: 2000, notify: false}
+    - {name: clap, when: home_sound = clap, above: 0.7, for_ms: 0, hold_ms: 500, notify: false}
+    - {name: voice, when: speech_present = true, above: 0.8, for_ms: 300, hold_ms: 1500, notify: false}
+
+- id: occupied-by-sound
+  idea: 98
+  title: Room occupied, from sound alone
+  setup: Board anywhere in the room, no camera needed. Any of speech, footsteps or general noise keeps it on for 5 minutes.
+  rules:
+    - {name: speech, when: speech_present = true, above: 0.8, for_ms: 500, hold_ms: 300000, notify: false}
+    - {name: footsteps, when: home_sound = footsteps, above: 0.6, for_ms: 300, hold_ms: 300000, notify: false}
+    - {name: not_quiet, when: sound_group != quiet, above: 0.8, for_ms: 3000, hold_ms: 300000, notify: false}
+
+- id: shower-timer
+  idea: 102
+  title: Shower or tap timer
+  setup: Board in the bathroom, away from spray. Alerts when water has run for 10 minutes; minutes of water come once a day.
+  rules:
+    - {name: long_shower, when: home_sound = water, above: 0.6, for_ms: 600000, hold_ms: 30000, count: daily,
+       notify: {text: "The water has been running for 10 minutes", cooldown_s: 900}}
+
+- id: rain-on-the-roof
+  idea: 103
+  title: Rain on the roof or window
+  setup: Board under the roof or by the window. Says when rain is heard, and counts minutes of rain a day. It does not tell light rain from heavy.
+  rules:
+    - {name: rain, when: weather_sound = rain, above: 0.7, for_ms: 3000, hold_ms: 120000, count: daily,
+       notify: {text: "Rain on the roof", cooldown_s: 3600}}
+
+# Radio movement. These read the Wi-Fi signal between your router and the board, not the camera or the microphone.
+# The board must be on your Wi-Fi with "Radio movement" switched on (Radio tab). The score sees movement; it cannot
+# tell a person who sits still from an empty room. 0.055 separated walking from sitting in one room in one test:
+# watch the score on the Radio tab in your room, empty and with someone walking, and set the threshold between.
+
+- id: radio-room-movement
+  idea: 81
+  status: radio
+  title: Movement in the room, from the Wi-Fi signal
+  setup: Put the board so that the room lies between it and the router. On while something moves and for 5 minutes after.
+  rules:
+    - {name: movement, when: radio_motion > 0.055, for_ms: 1000, hold_ms: 300000, notify: false}
+
+- id: radio-movement-alert
+  idea: 90
+  status: radio
+  title: Movement at home while you are away
+  setup: Board and router on opposite sides of the rooms to cover. It does not know whether your phone is home; set the hours you are normally out, or change the rule when you leave. Pets, fans and people next door can fire it.
+  rules:
+    - {name: movement_away, when: radio_motion > 0.055, for_ms: 2000, hold_ms: 60000, hours: "09:00-17:00",
+       notify: {text: "Movement at home", cooldown_s: 300}}
+
+- id: radio-movement-night
+  idea: 90
+  status: radio
+  title: Movement downstairs at night
+  setup: As above, for the hours you are asleep. Put the board and the router in the rooms nobody should be in.
+  rules:
+    - {name: movement_night, when: radio_motion > 0.055, for_ms: 2000, hold_ms: 60000, hours: "00:30-05:30",
+       notify: {text: "Movement at night", cooldown_s: 300}}

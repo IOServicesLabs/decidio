@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.3"
+  espressif/esp-tflite-micro: "~1.4.1"   # TFLite Micro + espressif/esp-nn (ESP32-S3 SIMD kernels)
+  espressif/esp32-camera: ">=2.0.0"
+  espressif/mdns: "^1.4.0"                # http://decidio-XXXX.local

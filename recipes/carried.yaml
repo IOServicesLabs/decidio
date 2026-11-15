@@ -1,0 +1,146 @@
+# Recipes: carried in a pocket, on a bag, bike or wearable (ideas 45-64 in USE_CASES.md). Fields: see home.yaml.
+# A carried board usually has no Wi-Fi, so these default to pins and counts, not alerts. How long a battery lasts
+# with these has not been measured.
+
+- id: siren-or-horn
+  idea: 45
+  title: Siren or horn warning while wearing headphones
+  setup: Clip the board where the microphone is uncovered. Give the rule a pin for a buzzer or vibration motor.
+  rules:
+    - {name: alert, when: alert_sound = true, above: 0.8, for_ms: 300, hold_ms: 2000,
+       notify: {text: "Siren or horn nearby", cooldown_s: 60}}
+
+- id: bike-vehicle-behind
+  idea: 46
+  title: Bike rear camera, vehicle close behind
+  setup: Camera facing backwards under the saddle. Give the rule a pin for the rear light.
+  rules:
+    - {name: vehicle_behind, when: vehicle_present = true, above: 0.8, for_ms: 300, hold_ms: 3000, notify: false}
+
+- id: someone-behind
+  idea: 47
+  title: Backpack camera, someone close behind
+  setup: Camera facing backwards on the bag strap.
+  rules:
+    - {name: person_behind, when: person_present = true, above: 0.85, for_ms: 1500, hold_ms: 5000, notify: false}
+
+- id: person-or-vehicle-ahead
+  idea: 48
+  title: Person or vehicle ahead, buzz
+  setup: Camera facing forwards at chest height. Two rules, so two different buzz patterns are possible. An aid, not a replacement for a cane or a dog.
+  rules:
+    - {name: person_ahead, when: person_present = true, above: 0.8, for_ms: 300, hold_ms: 1500, notify: false}
+    - {name: vehicle_ahead, when: vehicle_present = true, above: 0.8, for_ms: 300, hold_ms: 1500, notify: false}
+
+- id: indoors-or-outdoors
+  idea: 49
+  title: Indoors or outdoors
+  setup: Camera facing forwards. One rule for each state.
+  rules:
+    - {name: indoors, when: indoors = true, above: 0.8, for_ms: 3000, hold_ms: 5000, notify: false}
+    - {name: outdoors, when: indoors != true, above: 0.8, for_ms: 3000, hold_ms: 5000, notify: false}
+
+- id: umbrella-reminder
+  idea: 50
+  title: Umbrella reminder on stepping outside
+  setup: Camera facing forwards. Fires when the view is outdoors and rain is seen for 2 seconds.
+  rules:
+    - {name: umbrella, when: [indoors != true @ 0.7, weather = rain @ 0.6], for_ms: 2000, hold_ms: 600000,
+       notify: {text: "It is raining: take an umbrella", cooldown_s: 3600}}
+
+- id: life-log
+  idea: 51
+  title: Life-log tags
+  setup: Camera facing forwards. Nothing is sent as it happens; minutes per tag come as one message a day.
+  rules:
+    - {name: outdoors, when: indoors != true, above: 0.8, for_ms: 5000, hold_ms: 10000, count: daily, notify: false}
+    - {name: at_a_desk, when: place = office, above: 0.6, for_ms: 5000, hold_ms: 10000, count: daily, notify: false}
+    - {name: on_the_street, when: place = street, above: 0.6, for_ms: 5000, hold_ms: 10000, count: daily, notify: false}
+    - {name: in_nature, when: place = nature, above: 0.6, for_ms: 5000, hold_ms: 10000, count: daily, notify: false}
+    - {name: eating, when: subject = food, above: 0.5, for_ms: 5000, hold_ms: 60000, count: daily, notify: false}
+    - {name: in_the_rain, when: weather = rain, above: 0.7, for_ms: 5000, hold_ms: 60000, count: daily, notify: false}
+
+- id: pause-on-speech
+  idea: 52
+  title: Pause the music when someone speaks to you
+  setup: Board near your collar. Give the rule a pin wired to your player's pause input.
+  rules:
+    - {name: spoken_to, when: speech_present = true, above: 0.8, for_ms: 300, hold_ms: 3000, notify: false}
+
+- id: conversation-time
+  idea: 53
+  title: Conversation-time tracker that records nothing
+  setup: Board near your collar. Minutes of speech come as one message a day.
+  rules:
+    - {name: conversation, when: speech_present = true, above: 0.8, for_ms: 1000, hold_ms: 5000, count: daily, notify: false}
+
+- id: cough-counter
+  idea: 54
+  title: Cough counter
+  setup: Board near your collar. The count comes as one message a day. The model was not trained on sneezes.
+  rules:
+    - {name: cough, when: home_sound = cough, above: 0.7, for_ms: 0, hold_ms: 1500, count: daily, notify: false}
+
+- id: clap-switch
+  idea: 55
+  title: Clap to trigger something
+  setup: Give the rule a pin. It pulses for half a second on each clap.
+  rules:
+    - {name: clap, when: home_sound = clap, above: 0.7, for_ms: 0, hold_ms: 500, notify: false}
+
+- id: commute
+  idea: 57
+  title: Commute detection from engine and train sounds
+  setup: Board in a bag pocket with the microphone uncovered. On after a minute of traffic or train noise.
+  rules:
+    - {name: commuting, when: sound_group = outside, above: 0.7, for_ms: 60000, hold_ms: 300000, count: daily, notify: false}
+
+- id: noise-exposure
+  idea: 58
+  title: Noise-exposure log near loud machines
+  setup: Board on your clothing. Minutes of machine and traffic sound come as one message a day. It classifies the sound; it does not measure decibels.
+  rules:
+    - {name: loud, when: sound_group = outside, above: 0.8, for_ms: 10000, hold_ms: 10000, count: daily, notify: false}
+
+- id: screen-time
+  idea: 59
+  title: Screen-time tracker
+  setup: Camera facing forwards at chest or glasses height. Minutes with a screen in view come as one message a day.
+  rules:
+    - {name: screen, when: subject = electronics, above: 0.5, for_ms: 10000, hold_ms: 30000, count: daily, notify: false}
+
+- id: meal-log
+  idea: 60
+  title: Meal log
+  setup: Camera facing forwards. Each stretch with food in view counts as one meal.
+  rules:
+    - {name: meal, when: subject = food, above: 0.5, for_ms: 5000, hold_ms: 300000, count: daily, notify: false}
+
+- id: hiking-animal-ahead
+  idea: 61
+  title: Hiking, animal ahead
+  setup: Camera facing forwards. Give the rule a pin for a buzzer.
+  rules:
+    - {name: animal_ahead, when: animal_present = true, above: 0.8, for_ms: 500, hold_ms: 5000, notify: false}
+
+- id: animal-camera-trigger
+  idea: 62
+  title: Camera trigger when a bird or animal is in frame
+  setup: Aim the board the same way as your camera and wire the rule's pin to the shutter release.
+  rules:
+    - {name: animal_in_frame, when: animal_type != none, above: 0.7, for_ms: 300, hold_ms: 2000, notify: false}
+
+- id: bus-arriving
+  idea: 63
+  title: Bus arriving at the stop
+  setup: Camera looking up the road from the stop or a window. `vehicle_type` is one of the weaker answers; check it on your road.
+  rules:
+    - {name: bus, when: vehicle_type = bus, above: 0.6, for_ms: 500, hold_ms: 30000,
+       notify: {text: "A bus is arriving", cooldown_s: 120}}
+
+- id: clear-sky-timelapse
+  idea: 64
+  title: Time-lapse only when the sky is clear
+  setup: Camera looking at the sky. Wire the rule's pin to your camera's enable or shutter input.
+  rules:
+    - {name: clear_sky, when: weather = clear, above: 0.7, for_ms: 10000, hold_ms: 60000, notify: false}

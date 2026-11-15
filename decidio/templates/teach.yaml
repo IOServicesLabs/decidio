@@ -1,0 +1,35 @@
+# decidio project: teach your own question on a trained base model - about a minute on a laptop, a few dozen examples.
+# decidio fetch starter && decidio import && decidio teach && decidio flash model --port COM5
+name: teach
+base: general-cam            # decidio bases lists them: general-cam (camera, any board) | general (camera + mic, xiao_sense)
+board: s3cam                 # xiao_sense | s3cam
+                             # inputs: and model: come from the base - do not repeat them here
+
+keep: [person_present]       # answers of the base to keep as they are (no data needed); keep: all = every one
+
+questions:                   # your own; types: noul (true/false) | choice (named options) | score (ordered options)
+  my_thing:
+    type: noul
+    modality: image
+    instructions: "Is my thing in view?"
+    criteria: {true: "a photo of my thing", false: "a photo without it"}
+
+actions:                     # what the board does with the answers: an event line on USB and, if you like, a pin
+  - name: my_thing
+    when: my_thing = true
+    above: 0.8               # probability
+    for_ms: 300              # must hold this long
+    gpio: -1                 # -1 = event line only; e.g. 21 drives the XIAO's LED (level 0 = on)
+    level: 1
+    hold_ms: 2000
+
+sources:                     # decidio import  (or: decidio collect / decidio import-files / decidio label ui)
+  mine:
+    type: folders            # photos/<option>/<files>: here photos/true/*.jpg (and photos/false/*.jpg if you have some)
+    path: photos
+    question: my_thing
+  starter:                   # the shared starter set (1000 everyday photos, 400 sounds) as "everything else"
+    type: starter
+    labels:
+      my_thing: {false: "*"}                 # none of the starter set shows my thing
+      # if your thing is a COCO class, the starter set has examples of it too:  my_thing: {true: [cup, bottle]}

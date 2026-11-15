@@ -1,0 +1,227 @@
+# Recipes: around the home (ideas 1-27 in USE_CASES.md). One entry per idea.
+#
+#   id      what you type in `decidio install <id>`, and the name of the per-idea image
+#   idea    its number in USE_CASES.md
+#   rules   as under `actions:` in decidio.yaml (decidio/boardrules.py explains every field)
+#   setup   where to put the board, and what to check first
+#
+# No recipe drives a pin by default (gpio: -1). Choose a pin on the board's Ideas tab, or add `gpio:` here.
+# Thresholds are starting points. Watch the Live tab in your own room and adjust them.
+
+- id: lights-while-occupied
+  idea: 1
+  title: Lights on while someone is in the room
+  setup: Point the camera at the room. The rule stays on for 5 minutes after the last sighting, so a pin can hold a light on.
+  rules:
+    - {name: occupied, when: person_present = true, above: 0.8, for_ms: 300, hold_ms: 300000, notify: false}
+
+- id: tv-off-unwatched
+  idea: 2
+  title: Turn the TV off when nobody is watching
+  setup: Put the camera where it sees both the screen and the seats. Fires after 10 minutes with a screen in view and no person.
+  rules:
+    - {name: tv_unwatched, when: [person_present != true @ 0.7, subject = electronics @ 0.4], for_ms: 600000, hold_ms: 60000,
+       notify: {text: "The TV has been on with nobody watching for 10 minutes", cooldown_s: 1800}}
+
+- id: desk-wake
+  idea: 3
+  title: Desk lamp and monitor wake when you sit down
+  setup: Point the camera at your chair. On within a second of you sitting down, off a minute after you leave.
+  rules:
+    - {name: at_desk, when: person_present = true, above: 0.8, for_ms: 200, hold_ms: 60000, notify: false}
+
+- id: door-lingering
+  idea: 4
+  title: Someone lingering at the front door
+  setup: Point the camera at the doorstep. Someone walking past does not fire it; someone who stays 30 seconds does.
+  rules:
+    - {name: lingering, when: person_present = true, above: 0.8, for_ms: 30000, hold_ms: 60000,
+       notify: {text: "Someone has been at the door for 30 seconds", cooldown_s: 300}}
+
+- id: car-in-driveway
+  idea: 5
+  title: Car in the driveway
+  setup: Point the camera at the parking spot. The rule is on while a vehicle is seen.
+  rules:
+    - {name: car_here, when: vehicle_present = true, above: 0.8, for_ms: 2000, hold_ms: 30000, on: both,
+       notify: {text: "Driveway", cooldown_s: 300}}
+
+- id: pet-at-door
+  idea: 6
+  title: Pet at the door
+  setup: Point the camera at the floor by the door or flap. `animal_type` is one of the weaker answers; check it sees your pet.
+  rules:
+    - {name: cat_at_door, when: animal_type = cat, above: 0.6, for_ms: 1000, hold_ms: 30000,
+       notify: {text: "The cat is at the door", cooldown_s: 300}}
+    - {name: dog_at_door, when: animal_type = dog, above: 0.6, for_ms: 1000, hold_ms: 30000,
+       notify: {text: "The dog is at the door", cooldown_s: 300}}
+
+- id: bird-at-feeder
+  idea: 7
+  title: Bird at the feeder
+  setup: Point the camera at the feeder from close by. Visits are counted and reported once a day. Switch `photo` on to get a picture.
+  rules:
+    - {name: bird, when: animal_type = bird, above: 0.6, for_ms: 500, hold_ms: 20000, count: daily,
+       notify: {text: "A bird is at the feeder", cooldown_s: 900}}
+
+- id: garden-animal
+  idea: 8
+  title: Wildlife or pests in the garden
+  setup: Point the camera at the bed or lawn. Give the rule a pin to start a sprinkler valve.
+  rules:
+    - {name: garden_animal, when: animal_present = true, above: 0.8, for_ms: 1000, hold_ms: 30000,
+       notify: {text: "An animal is in the garden", cooldown_s: 600}}
+
+- id: hens-in-coop
+  idea: 9
+  title: Hens back in the coop at dusk
+  setup: Put the camera inside the coop. Between 17:00 and 23:00 the rule turns on once animals have been seen for 5 seconds.
+  rules:
+    - {name: hens_in, when: animal_present = true, above: 0.7, for_ms: 5000, hold_ms: 600000, hours: "17:00-23:00",
+       notify: {text: "The hens are in the coop", cooldown_s: 3600}}
+
+- id: knock
+  idea: 10
+  title: Knock on the door
+  setup: Put the board near the door, microphone uncovered. Give the rule a pin to flash a light.
+  rules:
+    - {name: knock, when: home_sound = knock, above: 0.7, for_ms: 0, hold_ms: 3000,
+       notify: {text: "Someone is knocking", cooldown_s: 30}}
+
+- id: glass-break
+  idea: 11
+  title: Glass breaking
+  setup: Put the board in the room with the windows. Do not rely on it as an alarm; test it with a recording first.
+  rules:
+    - {name: glass, when: home_sound = glass, above: 0.6, for_ms: 0, hold_ms: 5000,
+       notify: {text: "Glass breaking heard", cooldown_s: 30}}
+
+- id: baby-crying
+  idea: 12
+  title: Baby crying
+  setup: Put the board in the baby's room, a few metres from the cot.
+  rules:
+    - {name: baby, when: home_sound = baby, above: 0.7, for_ms: 1500, hold_ms: 30000,
+       notify: {text: "The baby is crying", cooldown_s: 120}}
+
+- id: dog-barking
+  idea: 13
+  title: Dog barking while you are out
+  setup: Put the board where the dog spends the day. Barks are counted and reported once a day; an alert comes at most every 10 minutes.
+  rules:
+    - {name: barking, when: home_sound = dog, above: 0.7, for_ms: 300, hold_ms: 10000, count: daily,
+       notify: {text: "The dog is barking", cooldown_s: 600}}
+
+- id: water-left-running
+  idea: 14
+  title: Tap or toilet left running
+  setup: Put the board in the bathroom or by the sink. Fires when running water has been heard for 5 minutes without a break.
+  rules:
+    - {name: water_running, when: home_sound = water, above: 0.6, for_ms: 300000, hold_ms: 60000,
+       notify: {text: "Water has been running for 5 minutes", cooldown_s: 900}}
+
+- id: washer-finished
+  idea: 15
+  title: Washing machine has finished
+  setup: Put the board next to the machine. The alert comes when appliance noise that lasted at least 2 minutes has been gone for 3.
+  rules:
+    - {name: washer, when: home_sound = appliance, above: 0.6, for_ms: 120000, hold_ms: 180000, on: end,
+       notify: {text: "The washing machine has stopped", cooldown_s: 600}}
+
+- id: cough-snore-log
+  idea: 16
+  title: Coughing or snoring log at night
+  setup: Put the board on the bedside table. Nothing is sent as it happens; the counts come as one message a day.
+  rules:
+    - {name: cough, when: home_sound = cough, above: 0.7, for_ms: 0, hold_ms: 2000, hours: "22:00-07:00", count: daily, notify: false}
+    - {name: snoring, when: home_sound = snoring, above: 0.7, for_ms: 2000, hold_ms: 10000, hours: "22:00-07:00", count: daily, notify: false}
+
+- id: quiet-hours-noise
+  idea: 17
+  title: Quiet-hours noise monitor
+  setup: Put the board in the room to watch. Between 22:00 and 07:00 it alerts when the room has not been quiet for 3 seconds.
+  rules:
+    - {name: noise, when: sound_group != quiet, above: 0.8, for_ms: 3000, hold_ms: 30000, hours: "22:00-07:00", count: daily,
+       notify: {text: "Noise during quiet hours", cooldown_s: 600}}
+
+- id: room-in-use
+  idea: 18
+  title: Room in use, from speech
+  setup: Put the board in the meeting room. On while speech is heard and for 2 minutes after; give it a pin for a sign. No audio leaves the board.
+  rules:
+    - {name: in_use, when: speech_present = true, above: 0.8, for_ms: 500, hold_ms: 120000, notify: false}
+
+- id: rain-started
+  idea: 19
+  title: It started raining
+  setup: Camera looking out of a window, or the board under a roof where rain is heard. Either sense can fire.
+  rules:
+    - {name: rain_seen, when: weather = rain, above: 0.7, for_ms: 2000, hold_ms: 600000,
+       notify: {text: "It is raining (seen)", cooldown_s: 3600}}
+    - {name: rain_heard, when: weather_sound = rain, above: 0.7, for_ms: 2000, hold_ms: 600000,
+       notify: {text: "It is raining (heard)", cooldown_s: 3600}}
+
+- id: skip-irrigation
+  idea: 20
+  title: Skip the irrigation when it rains
+  setup: Camera looking at the sky or garden. The rule stays on for an hour after rain was seen; wire its pin to the controller's rain input.
+  rules:
+    - {name: rained, when: weather = rain, above: 0.6, for_ms: 5000, hold_ms: 3600000, notify: false}
+
+- id: snow-on-driveway
+  idea: 21
+  title: Snow on the driveway
+  setup: Camera looking at the driveway in daylight.
+  rules:
+    - {name: snow, when: weather = snow, above: 0.7, for_ms: 5000, hold_ms: 1800000,
+       notify: {text: "Snow on the driveway", cooldown_s: 3600}}
+
+- id: fog-lights
+  idea: 22
+  title: Fog, switch the outdoor lights on
+  setup: Camera looking outdoors. Give the rule a pin for the lights.
+  rules:
+    - {name: fog, when: weather = fog, above: 0.7, for_ms: 5000, hold_ms: 600000, notify: false}
+
+- id: blinds-by-sky
+  idea: 23
+  title: Blinds down when sunny, up when overcast
+  setup: Camera looking at the sky. Two rules, one for each state; give each a pin.
+  rules:
+    - {name: sunny, when: weather = clear, above: 0.7, for_ms: 10000, hold_ms: 300000, notify: false}
+    - {name: overcast, when: weather = cloudy, above: 0.7, for_ms: 10000, hold_ms: 300000, notify: false}
+
+- id: thunder
+  idea: 24
+  title: Thunder heard
+  setup: Put the board near a window.
+  rules:
+    - {name: thunder, when: weather_sound = thunder, above: 0.6, for_ms: 0, hold_ms: 60000,
+       notify: {text: "Thunder heard", cooldown_s: 600}}
+
+- id: wind-picking-up
+  idea: 25
+  title: Wind picking up
+  setup: Put the board outdoors under cover, microphone facing the open. Give the rule a pin to retract an awning.
+  rules:
+    - {name: wind, when: weather_sound = wind, above: 0.7, for_ms: 3000, hold_ms: 300000,
+       notify: {text: "The wind is picking up", cooldown_s: 1800}}
+
+- id: nobody-in-kitchen
+  idea: 26
+  title: Nobody seen in the kitchen by 10 am
+  setup: Camera looking at the kitchen. Alerts at 10:00 if no person was seen since 06:00. One false sighting resets the wait, so test it for a few days before trusting it.
+  rules:
+    - {name: no_morning, when: person_present != true @ 0.7, for_ms: 14400000, hold_ms: 60000, hours: "06:00-10:05",
+       notify: {text: "Nobody has been seen in the kitchen this morning", cooldown_s: 3600}}
+
+- id: which-room
+  idea: 27
+  title: A device that knows which room it is in
+  setup: Carry it or mount it; the rule for the room it sees turns on. `place` is right about two times in three.
+  rules:
+    - {name: kitchen, when: place = kitchen, above: 0.6, for_ms: 5000, hold_ms: 10000, notify: false}
+    - {name: bedroom, when: place = bedroom, above: 0.6, for_ms: 5000, hold_ms: 10000, notify: false}
+    - {name: living_room, when: place = living_room, above: 0.6, for_ms: 5000, hold_ms: 10000, notify: false}
+    - {name: bathroom, when: place = bathroom, above: 0.6, for_ms: 5000, hold_ms: 10000, notify: false}
+    - {name: office, when: place = office, above: 0.6, for_ms: 5000, hold_ms: 10000, notify: false}

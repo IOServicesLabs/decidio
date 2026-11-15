@@ -1,0 +1,46 @@
+# decidio project: start here - define your own decisions, collect, label, train.
+name: blank
+board: xiao_sense            # xiao_sense (camera + mic) | s3cam (camera only)
+
+inputs:
+  image:                     # delete this block for an audio-only model
+    size: 96                 # 16..96; smaller is faster (64 ~ 2x faster vision)
+    color: gray              # gray | rgb
+    motion: true             # extra channel |frame - frame 200 ms earlier|
+  audio:                     # delete this block for a camera-only model (required on s3cam)
+    sample_rate: 16000
+    clip_seconds: 1.0
+
+model:
+  preset: small              # tiny (fastest) | small | base (most accurate)
+  backbone: tiny             # tiny (from scratch, 3.5M multiply-adds) | mobilenet_v1_0.25 (ImageNet-pretrained, ~7M:
+                             # much better on photos of the world and on small datasets) | mobilenet_v1_0.5
+
+train:
+  epochs: 60
+
+# Question types:
+#   noul    true/false                    criteria: {true: "...", false: "..."}   (text used by zero-shot teachers)
+#   choice  one of named options          criteria: {option_id: "description", ...}
+#   score   ordered options (0, 1, 2 ...) criteria: ["lowest", "middle", "highest"]
+# modality: image | audio tells the model (and zero-shot teachers) which input answers the question.
+questions:
+  something_happening:
+    type: noul
+    instructions: "Is anything happening in front of the sensor?"
+    criteria: {true: "a scene with something happening", false: "an empty, quiet scene"}
+
+# actions:                   # optional GPIO / event rules, evaluated on the board after every decision
+#   - name: alert
+#     when: something_happening = true
+#     above: 0.8
+#     for_ms: 300
+#     gpio: 21               # -1 = event line only
+#     level: 0
+#     hold_ms: 2000
+
+# sources:                   # optional: import labelled data (see README "Importing data")
+#   mine:
+#     type: folders          # <path>/<option>/<images or audio files>
+#     path: C:/data/my_scenes
+#     question: something_happening

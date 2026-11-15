@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>decidio installer - IO Services</title>
+<meta name="description" content="Install a decidio idea on an ESP32-S3 camera board over USB from the browser, then set up its Wi-Fi, page password and alerts.">
+<!-- The decidio installer: static files only, no build step.
+     Steps 1 to 3 flash a board with ESP Web Tools (https://esphome.github.io/esp-web-tools/), pinned below.
+     Step 4 talks to the board's serial console with Web Serial (setup.js). Add ?demo to the address for a simulated board.
+     Serve this folder over https:// or from localhost:  python -m http.server -d installer 8000
+     The builds it lists are made by:  python tools/make_builds.py -->
+<script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
+<link rel="stylesheet" href="site.css">
+<script type="module" src="site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Go to the steps</a>
+
+<header class="wrap top">
+  <p class="brand"><b>decidio</b> <span>by <a href="https://ioservices.io/">IO Services</a></span></p>
+  <h1>Install decidio on your board and set it up</h1>
+  <p class="lede">decidio puts a small decision model on an ESP32-S3 camera board. The model answers questions about what the
+    camera sees and what the microphone hears. Rules on the board use the answers to set a pin or to send an alert.</p>
+  <p class="lede">Use this page to install an idea on the board over USB. Then connect the board to Wi-Fi and set up its alerts.
+    You do not install software on your computer.</p>
+  <ul class="boards" aria-label="Supported boards">
+    <li><span><b>Seeed XIAO ESP32S3 Sense</b>: camera and microphone.</span></li>
+    <li><span><b>ESP32-S3-CAM</b> with the ESP32-S3-EYE pin layout: camera, no microphone.</span></li>
+  </ul>
+  <p class="links">
+    <a href="https://github.com/IOServicesLabs/decidio">decidio on GitHub</a>
+    <a href="https://github.com/IOServicesLabs/decidio/blob/main/README.md">README.md</a>
+    <a href="https://github.com/IOServicesLabs/decidio/blob/main/GUIDE.md">GUIDE.md</a>
+    <a href="https://github.com/IOServicesLabs/decidio/blob/main/USE_CASES.md">USE_CASES.md</a>
+  </p>
+  <div id="demoBanner" class="notice demo" role="note" hidden>
+    <b>Demo mode.</b> Step 4 uses a simulated board, not a USB device. The settings go nowhere.
+    <a id="demoExit" href="./">Use a real board</a>
+  </div>
+  <div id="browserNotice" class="notice" role="note" hidden></div>
+  <nav class="stepnav" aria-label="Steps">
+    <ol>
+      <li><a href="#step-board"><span>1.</span> Board</a></li>
+      <li><a href="#step-idea"><span>2.</span> Idea</a></li>
+      <li><a href="#step-install"><span>3.</span> Install</a></li>
+      <li><a href="#step-setup"><span>4.</span> Set up</a></li>
+    </ol>
+  </nav>
+</header>
+
+<main id="main" class="wrap" tabindex="-1">
+
+  <section class="step" id="step-board" aria-labelledby="h-board">
+    <h2 id="h-board"><span class="n">1.</span> Board</h2>
+    <div class="body">
+      <p class="intro">Select your type of board.</p>
+      <fieldset>
+        <legend>Type of board</legend>
+        <div class="tiles" id="boards"><p class="dim">Loading the boards...</p></div>
+      </fieldset>
+      <p class="note">The firmware is the same for each board. When the board starts, the firmware finds the camera and the
+        microphone. Your selection changes only the model. If you do not know your type of board, select the first type. It
+        operates on each board. On a board without a microphone, its sound questions are off.</p>
+    </div>
+  </section>
+
+  <section class="step" id="step-idea" aria-labelledby="h-idea">
+    <h2 id="h-idea"><span class="n">2.</span> Idea</h2>
+    <div class="body">
+      <p class="intro">Select one idea. An idea is the base model with a set of rules. You can change the rules later on the
+        page of the board.</p>
+      <label for="filter">Search the ideas</label>
+      <input id="filter" type="search" autocomplete="off" spellcheck="false" placeholder="For example: person, knock, rain, bird, movement">
+      <fieldset>
+        <legend class="sr">Ideas</legend>
+        <div class="list" id="list"></div>
+      </fieldset>
+      <p class="dim count" id="count" aria-live="polite"></p>
+      <p class="picked" id="picked" hidden>Selected idea: <b id="pickedTitle"></b>. <a href="#step-install">Go to 3. Install</a></p>
+    </div>
+  </section>
+
+  <section class="step" id="step-install" aria-labelledby="h-install">
+    <h2 id="h-install"><span class="n">3.</span> Install</h2>
+    <div class="body">
+      <div class="chosen" id="chosen" aria-live="polite">
+        <span class="t" id="chosenTitle">No idea is selected.</span>
+        <span class="s" id="chosenSetup">Select an idea in step 2.</span>
+      </div>
+      <esp-web-install-button id="install" hidden>
+        <button slot="activate" class="btn primary">Connect and install</button>
+        <span slot="unsupported" class="unsup">This browser cannot connect to USB devices. Use Chrome or Edge on a computer.</span>
+        <span slot="not-allowed" class="unsup">Open this page over https:// or from localhost.</span>
+      </esp-web-install-button>
+      <ol class="how">
+        <li>Connect the board to this computer with a USB cable. Use a cable that carries data. A cable for charge only shows no port.</li>
+        <li>Seeed XIAO ESP32S3 Sense: push and hold the small <b>B</b> (BOOT) button while you connect the USB cable. Then
+          select the port "USB JTAG/serial debug unit".</li>
+        <li>ESP32-S3-CAM: connect the cable to the USB socket with the label <b>UART</b>.</li>
+        <li>Click <b>Connect and install</b>.</li>
+        <li>Select the port of the board in the window of the browser.</li>
+        <li>Follow the instructions in the window until the install is complete.</li>
+        <li>The board starts again. Go to step 4 to set it up. If the board does not start, disconnect the USB cable and
+          connect it again.</li>
+      </ol>
+      <p class="caution"><b>CAUTION:</b> The install replaces the firmware and the model on the board. The Wi-Fi settings, the page
+        password and the alert settings stay on the board.</p>
+      <p class="dim">The new idea starts with its own rules. Rules that you changed on the page of the board for a different
+        idea do not stay.</p>
+      <p class="warning"><b>WARNING:</b> A model makes errors, and a rule operates on an error as it does on a correct answer.
+        GUIDE.md gives the error rates. Test each idea in your room. Do not use decidio as a safety device or as an alarm.</p>
+    </div>
+  </section>
+
+  <section class="step" id="step-setup" aria-labelledby="h-setup">
+    <h2 id="h-setup"><span class="n">4.</span> Set up</h2>
+    <div class="body">
+      <p class="intro">Use this step with each board that has decidio firmware. A board that you installed with the
+        <code>decidio install</code> command also operates here, so you can start at this step.</p>
+      <ol class="how">
+        <li>Connect the board to this computer with the USB cable.</li>
+        <li>Click <b>Connect to the board</b>.</li>
+        <li>Select the port of the board in the window of the browser.</li>
+      </ol>
+      <p class="note">The settings go to the board over USB only. This website does not send them to a server.</p>
+      <p class="dim">Only one program at a time can use the port. Close the install window and other serial programs first.</p>
+
+      <div class="conn">
+        <button type="button" class="btn primary" id="connect">Connect to the board</button>
+        <button type="button" class="btn" id="disconnect" hidden>Disconnect</button>
+        <span class="state" id="connState">Not connected</span>
+      </div>
+      <p class="msg" id="connMsg" role="status" aria-live="polite"></p>
+      <p class="unsup" id="serialUnsupported" hidden></p>
+
+      <fieldset id="setupForms" disabled>
+        <legend class="sr">Settings of the board</legend>
+
+        <div class="sub" id="summaryBox">
+          <h3>Board summary</h3>
+          <p class="dim" id="summaryEmpty">Connect to the board to show its summary.</p>
+          <dl class="summary" id="summary" hidden></dl>
+        </div>
+
+        <div class="sub">
+          <h3>Wi-Fi</h3>
+          <p>Type the name and the password of your Wi-Fi network. The board uses 2.4 GHz networks only.</p>
+          <form id="wifiForm" autocomplete="off" novalidate>
+            <div class="grid2">
+              <div>
+                <label for="wifiSsid">Network name</label>
+                <input id="wifiSsid" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32">
+              </div>
+              <div>
+                <label for="wifiPass">Password</label>
+                <input id="wifiPass" type="password" autocomplete="off" maxlength="64" aria-describedby="wifiPassHint">
+              </div>
+            </div>
+            <p class="hint" id="wifiPassHint">Leave the password empty for an open network. Otherwise the password has 8 to 63 characters.</p>
+            <label class="check"><input type="checkbox" id="wifiShow"> Show the password</label>
+            <div class="row"><button type="submit" class="btn primary" id="saveWifi">Save Wi-Fi</button></div>
+          </form>
+          <p class="msg" id="wifiMsg" role="status" aria-live="polite"></p>
+          <div class="addr" id="wifiAddr" hidden>
+            <p>Address of the board:</p>
+            <p><a id="addrHost" href="#" target="_blank" rel="noopener"></a></p>
+            <p><a id="addrIp" href="#" target="_blank" rel="noopener"></a></p>
+            <a class="open" id="openPage" href="#" target="_blank" rel="noopener">Open the page of the board</a>
+            <p class="hint">Some phones cannot open the address with .local. Use the address with numbers on them.</p>
+          </div>
+          <p class="hint">Without a USB connection: join the open Wi-Fi network decidio-xxxx of the board with a phone. The setup
+            page of the board opens. If it does not open, go to http://192.168.4.1.</p>
+        </div>
+
+        <div class="sub">
+          <h3>Page password</h3>
+          <p>Without a page password, each person on your network can open the page of the board and change it. The user
+            name for the page is <b>decidio</b>.</p>
+          <form id="passForm" autocomplete="off" novalidate>
+            <label for="pagePass">New page password (empty removes the password)</label>
+            <input id="pagePass" type="password" autocomplete="new-password" maxlength="60" aria-describedby="pagePassHint">
+            <p class="hint" id="pagePassHint">Use 60 characters or fewer. Do not use the characters " and \.</p>
+            <label class="check"><input type="checkbox" id="pageShow"> Show the password</label>
+            <div class="row"><button type="submit" class="btn primary" id="savePass">Save page password</button></div>
+          </form>
+          <p class="msg" id="passMsg" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="sub">
+          <h3>Alerts</h3>
+          <p>When a rule fires, the board can send an alert to Telegram, to a webhook or to an MQTT broker. Type the settings of one
+            or more destinations. Then click <b>Save alerts</b>.</p>
+          <p class="hint">The board does not show the values that it has. An empty field keeps the value that is on the board.</p>
+          <form id="alertForm" autocomplete="off" novalidate>
+            <fieldset class="dest" data-dest="telegram">
+              <legend>Telegram</legend>
+              <p class="hint">In Telegram, send <code>/newbot</code> to @BotFather to make a bot. Send a message to your new bot.
+                To find your chat ID, open https://api.telegram.org/bot&lt;token&gt;/getUpdates in a new tab. The chat ID is the
+                number after "chat":{"id":.</p>
+              <div class="grid2">
+                <div>
+                  <label for="tg_token">Bot token</label>
+                  <input id="tg_token" type="password" autocomplete="off" placeholder="Not changed" spellcheck="false">
+                </div>
+                <div>
+                  <label for="tg_chat">Chat ID</label>
+                  <input id="tg_chat" type="text" autocomplete="off" placeholder="Not changed" spellcheck="false">
+                </div>
+              </div>
+              <label class="check"><input type="checkbox" data-remove="telegram"> Remove the Telegram settings from the board</label>
+              <div class="row"><button type="button" class="btn small" data-test="telegram">Send test</button></div>
+              <p class="msg result" data-result="telegram" role="status" aria-live="polite"></p>
+            </fieldset>
+
+            <fieldset class="dest" data-dest="webhook">
+              <legend>Webhook</legend>
+              <p class="hint">For example ntfy, Discord, Slack or Home Assistant.</p>
+              <label for="hook_url">Address (http:// or https://)</label>
+              <input id="hook_url" type="text" inputmode="url" autocomplete="off" placeholder="Not changed" spellcheck="false">
+              <div class="grid2">
+                <div>
+                  <label for="hook_fmt">Format</label>
+                  <select id="hook_fmt">
+                    <option value="">Not changed</option>
+                    <option value="json">json: fields text, content, device, event, state, p, time</option>
+                    <option value="text">text: plain text, for ntfy</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="hook_hdr">Header (optional)</label>
+                  <input id="hook_hdr" type="text" autocomplete="off" placeholder="Not changed" spellcheck="false" aria-describedby="hookHdrHint">
+                </div>
+              </div>
+              <p class="hint" id="hookHdrHint">Header form: Name: value. For example: Authorization: Bearer abc123.</p>
+              <label class="check"><input type="checkbox" data-remove="webhook"> Remove the webhook settings from the board</label>
+              <div class="row"><button type="button" class="btn small" data-test="webhook">Send test</button></div>
+              <p class="msg result" data-result="webhook" role="status" aria-live="polite"></p>
+            </fieldset>
+
+            <fieldset class="dest" data-dest="mqtt">
+              <legend>MQTT</legend>
+              <label for="mqtt_url">Broker address (mqtt:// or mqtts://)</label>
+              <input id="mqtt_url" type="text" inputmode="url" autocomplete="off" placeholder="Not changed, for example mqtt://192.168.1.10:1883" spellcheck="false">
+              <div class="grid2">
+                <div>
+                  <label for="mqtt_user">User (optional)</label>
+                  <input id="mqtt_user" type="text" autocomplete="off" placeholder="Not changed" spellcheck="false">
+                </div>
+                <div>
+                  <label for="mqtt_pass">Password (optional)</label>
+                  <input id="mqtt_pass" type="password" autocomplete="off" placeholder="Not changed">
+                </div>
+              </div>
+              <p class="hint">Topics: decidio/<span class="hostName">decidio-xxxx</span>/event/&lt;rule&gt; and decidio/<span class="hostName">decidio-xxxx</span>/status.</p>
+              <label class="check"><input type="checkbox" data-remove="mqtt"> Remove the MQTT settings from the board</label>
+              <div class="row"><button type="button" class="btn small" data-test="mqtt">Send test</button></div>
+              <p class="msg result" data-result="mqtt" role="status" aria-live="polite"></p>
+            </fieldset>
+
+            <div class="row"><button type="submit" class="btn primary" id="saveAlerts">Save alerts</button></div>
+          </form>
+          <p class="msg" id="alertMsg" role="status" aria-live="polite"></p>
+          <p class="caution"><b>CAUTION:</b> The board keeps the Wi-Fi password, the page password and the tokens in its flash
+            memory without encryption. A person who takes the board can read them. Use a bot that you made only for this board.</p>
+        </div>
+
+        <div class="sub">
+          <h3>Restart</h3>
+          <p>The board reads a new page password when it starts.</p>
+          <div class="row"><button type="button" class="btn" id="restart">Restart the board</button></div>
+          <p class="msg" id="restartMsg" role="status" aria-live="polite"></p>
+        </div>
+      </fieldset>
+
+      <details class="log" id="logBox">
+        <summary>Console log</summary>
+        <p class="hint">The lines that the board sends, and the commands that this page sends. Copy them when you ask for help.
+          The page replaces each password, token and address that it sent with [hidden].</p>
+        <label class="check"><input type="checkbox" id="logAnswers"> Show the answers of the model (about 4 lines each second)</label>
+        <div class="row">
+          <button type="button" class="btn small" id="logCopy">Copy the log</button>
+          <button type="button" class="btn small" id="logClear">Clear the log</button>
+          <span class="msg" id="logMsg" role="status" aria-live="polite"></span>
+        </div>
+        <pre id="log" tabindex="0" aria-label="Console log"></pre>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span><b>decidio</b> by <a href="https://ioservices.io/" target="_blank" rel="noopener">IO Services</a></span>
+    <span class="usa">Built in the USA <span id="flag"></span></span>
+  </div>
+</footer>
+</body>
+</html>

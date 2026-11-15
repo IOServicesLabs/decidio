@@ -1,0 +1,4 @@
+# one image for every supported ESP32-S3 board: the board is found at start (main/board.c)
+# 8 MB layout (it also fits 16 MB boards); console on the chip's own USB, UART0 is added by console.c where the board has it
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

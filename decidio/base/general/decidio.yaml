@@ -1,0 +1,347 @@
+# decidio base model: a general camera + microphone model to teach your own questions on (decidio teach).
+# It answers broad everyday questions itself; its auxiliary questions (aux: true) make its features hold all 80 COCO
+# object classes, 50 ESC-50 sounds and 35 spoken words, so a new question needs only a small head and a few dozen
+# examples. The questions lean towards home automation and carried devices: see USE_CASES.md.
+# Retrain it: decidio fetch coco-train2017 esc50 weather speech-commands librispeech-dev && decidio import && decidio run
+#             (a GPU helps; ~23 GB of downloads)
+name: general
+board: xiao_sense            # camera + mic; the camera-only twin is general-cam
+
+inputs:
+  image:
+    size: 96
+    color: rgb               # colour matters for general questions (fire, fruit, lights, uniforms)
+    motion: true             # extra channel: |frame - frame 200 ms earlier|
+  audio:
+    sample_rate: 16000
+    clip_seconds: 1.0
+
+model:
+  preset: small
+  backbone: mobilenet_v1_0.25   # ImageNet-pretrained
+  emb: 128                      # the feature vector every head reads (wider than the preset: room for new questions)
+  hidden: 48
+
+train:
+  epochs: 30
+  max_per_epoch: 32000
+
+questions:
+  person_present:
+    type: noul
+    modality: image
+    instructions: "Is at least one person clearly visible?"
+    criteria: {true: "a photo with a person in it", false: "a photo with no people in it"}
+
+  animal_present:
+    type: noul
+    modality: image
+    instructions: "Is an animal clearly visible?"
+    criteria: {true: "a photo with an animal in it", false: "a photo with no animals in it"}
+
+  vehicle_present:
+    type: noul
+    modality: image
+    instructions: "Is a vehicle clearly visible?"
+    criteria: {true: "a photo with a vehicle in it", false: "a photo with no vehicles in it"}
+
+  subject:
+    type: choice
+    modality: image
+    instructions: "What kind of thing is the largest object in view?"
+    criteria:
+      none: "nothing in particular"
+      person: "a person"
+      animal: "an animal"
+      vehicle: "a vehicle"
+      food: "food"
+      tableware: "a bottle, cup, bowl or cutlery"
+      furniture: "furniture"
+      electronics: "a screen, laptop, phone or keyboard"
+      appliance: "a kitchen appliance or sink"
+      sports: "sports gear"
+      bag: "a bag, umbrella or tie"
+      street: "street furniture: a sign, light, hydrant or bench"
+      household: "a small household object"
+
+  animal_type:
+    type: choice
+    modality: image
+    instructions: "What is the most prominent animal?"
+    criteria:
+      none: "no animal"
+      cat: "a cat"
+      dog: "a dog"
+      bird: "a bird"
+      horse: "a horse"
+      farm: "a sheep or cow"
+      wild: "an elephant, bear, zebra or giraffe"
+
+  vehicle_type:
+    type: choice
+    modality: image
+    instructions: "What is the most prominent vehicle?"
+    criteria:
+      none: "no vehicle"
+      car: "a car"
+      bus: "a bus"
+      truck: "a truck"
+      motorbike: "a motorbike"
+      bicycle: "a bicycle"
+      train: "a train"
+      boat: "a boat"
+      airplane: "an airplane"
+
+  indoors:
+    type: noul
+    modality: image
+    instructions: "Is the camera indoors?"
+    criteria: {true: "a room or other indoor space", false: "an outdoor view"}
+
+  place:
+    type: choice
+    modality: image
+    instructions: "What kind of place is in view?"
+    criteria:
+      other: "none of these, or not clear"
+      kitchen: "a kitchen"
+      bathroom: "a bathroom"
+      bedroom: "a bedroom"
+      living_room: "a living room"
+      eating: "a dining room, restaurant or cafe"
+      office: "an office or desk"
+      street: "a street, road or car park"
+      green: "a park, garden, yard or field"
+      nature: "woods, hills, mountains or snow"
+      water: "a beach, the sea, a lake or a river"
+
+  weather:
+    type: choice
+    modality: image
+    instructions: "What is the weather in the outdoor view?"
+    criteria:
+      none: "not an outdoor view"
+      clear: "sunny or clear"
+      cloudy: "cloudy or overcast"
+      rain: "rain or a storm"
+      snow: "snow or frost"
+      fog: "fog or haze"
+
+  sound_group:
+    type: choice
+    modality: audio
+    instructions: "What kind of sound is it?"
+    criteria:
+      quiet: "a quiet room"
+      animal: "an animal sound"
+      nature: "rain, wind, water, fire or thunder"
+      human: "a human sound that is not speech: coughing, laughing, footsteps, clapping"
+      speech: "someone speaking"
+      household: "an indoor sound: a door, a clock, an appliance, typing, glass"
+      outside: "an outdoor machine sound: an engine, siren, horn, train, aircraft, saw"
+
+  alert_sound:
+    type: noul
+    modality: audio
+    instructions: "Is it a sound that usually calls for attention?"
+    criteria: {true: "a siren, car horn, alarm clock, breaking glass, crying baby or a knock on the door", false: "any other sound"}
+
+  speech_present:
+    type: noul
+    modality: audio
+    instructions: "Is someone speaking?"
+    criteria: {true: "speech: a word or a sentence", false: "any other sound, or quiet"}
+
+  home_sound:
+    type: choice
+    modality: audio
+    instructions: "Which of these sounds around the home is it?"
+    criteria:
+      none: "none of these"
+      dog: "a dog barking"
+      baby: "a baby crying"
+      cough: "coughing or sneezing"
+      knock: "a knock on the door"
+      glass: "glass breaking"
+      alarm: "an alarm clock"
+      water: "running, pouring or dripping water, a toilet flush"
+      appliance: "a washing machine or vacuum cleaner"
+      footsteps: "footsteps"
+      snoring: "snoring"
+      clap: "clapping"
+
+  weather_sound:
+    type: choice
+    modality: audio
+    instructions: "Can the weather be heard?"
+    criteria: {none: "no", rain: "rain", wind: "wind", thunder: "thunder"}
+
+  # ---- auxiliary: trained, not flashed. They make the model's features tell all of these apart. ----
+  thing:
+    type: choice
+    modality: image
+    aux: true
+    instructions: "What is the largest object in view?"
+    criteria: {none: nothing, person: person, bicycle: bicycle, car: car, motorcycle: motorcycle, airplane: airplane, bus: bus,
+               train: train, truck: truck, boat: boat, traffic light: traffic light, fire hydrant: fire hydrant, stop sign: stop sign,
+               parking meter: parking meter, bench: bench, bird: bird, cat: cat, dog: dog, horse: horse, sheep: sheep, cow: cow,
+               elephant: elephant, bear: bear, zebra: zebra, giraffe: giraffe, backpack: backpack, umbrella: umbrella,
+               handbag: handbag, tie: tie, suitcase: suitcase, frisbee: frisbee, skis: skis, snowboard: snowboard,
+               sports ball: sports ball, kite: kite, baseball bat: baseball bat, baseball glove: baseball glove,
+               skateboard: skateboard, surfboard: surfboard, tennis racket: tennis racket, bottle: bottle, wine glass: wine glass,
+               cup: cup, fork: fork, knife: knife, spoon: spoon, bowl: bowl, banana: banana, apple: apple, sandwich: sandwich,
+               orange: orange, broccoli: broccoli, carrot: carrot, hot dog: hot dog, pizza: pizza, donut: donut, cake: cake,
+               chair: chair, couch: couch, potted plant: potted plant, bed: bed, dining table: dining table, toilet: toilet,
+               tv: tv, laptop: laptop, mouse: mouse, remote: remote, keyboard: keyboard, cell phone: cell phone,
+               microwave: microwave, oven: oven, toaster: toaster, sink: sink, refrigerator: refrigerator, book: book,
+               clock: clock, vase: vase, scissors: scissors, teddy bear: teddy bear, hair drier: hair drier, toothbrush: toothbrush}
+
+  sound:
+    type: choice
+    modality: audio
+    aux: true
+    instructions: "What is the sound?"
+    criteria: {quiet: quiet, speech: speech, dog: dog, rooster: rooster, pig: pig, cow: cow, frog: frog, cat: cat, hen: hen, insects: insects,
+               sheep: sheep, crow: crow, rain: rain, sea_waves: sea waves, crackling_fire: crackling fire, crickets: crickets,
+               chirping_birds: chirping birds, water_drops: water drops, wind: wind, pouring_water: pouring water,
+               toilet_flush: toilet flush, thunderstorm: thunderstorm, crying_baby: crying baby, sneezing: sneezing,
+               clapping: clapping, breathing: breathing, coughing: coughing, footsteps: footsteps, laughing: laughing,
+               brushing_teeth: brushing teeth, snoring: snoring, drinking_sipping: drinking, door_wood_knock: a knock on a door,
+               mouse_click: mouse click, keyboard_typing: typing, door_wood_creaks: a creaking door, can_opening: a can opening,
+               washing_machine: washing machine, vacuum_cleaner: vacuum cleaner, clock_alarm: alarm clock, clock_tick: ticking clock,
+               glass_breaking: breaking glass, helicopter: helicopter, chainsaw: chainsaw, siren: siren, car_horn: car horn,
+               engine: engine, train: train, church_bells: church bells, airplane: airplane, fireworks: fireworks, hand_saw: hand saw}
+
+  word:
+    type: choice
+    modality: audio
+    aux: true
+    instructions: "Which word is spoken?"
+    criteria: {none: none, "backward": "backward", "bed": "bed", "bird": "bird", "cat": "cat", "dog": "dog",
+               "down": "down", "eight": "eight", "five": "five", "follow": "follow", "forward": "forward",
+               "four": "four", "go": "go", "happy": "happy", "house": "house", "learn": "learn", "left": "left",
+               "marvin": "marvin", "nine": "nine", "no": "no", "off": "off", "on": "on", "one": "one",
+               "right": "right", "seven": "seven", "sheila": "sheila", "six": "six", "stop": "stop",
+               "three": "three", "tree": "tree", "two": "two", "up": "up", "visual": "visual", "wow": "wow",
+               "yes": "yes", "zero": "zero"}
+
+actions:                     # optional GPIO / event rules run on the board after every decision
+  - {name: person, when: person_present = true, above: 0.8, for_ms: 300, gpio: -1, hold_ms: 2000}
+  - {name: alert, when: alert_sound = true, above: 0.8, for_ms: 300, gpio: -1, hold_ms: 2000}
+  - {name: raining, when: weather = rain, above: 0.7, for_ms: 2000, gpio: -1, hold_ms: 60000}
+  - {name: speech, when: speech_present = true, above: 0.8, for_ms: 300, gpio: -1, hold_ms: 2000}
+
+sources:                     # decidio import  (paths are relative to this folder)
+  coco:
+    type: coco
+    annotations: downloads/annotations/instances_train2017.json   # read from annotations_trainval2017.zip if not unpacked
+    images: downloads/train2017.zip                               # zip or folder
+    max_images: 45000
+    crops: 2                 # square crops per photo
+    min_size: 0.12           # an object smaller than this share of the frame is "unknown", not "absent"
+    labels:
+      person_present: {true: [person]}
+      animal_present: {true: [bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe]}
+      vehicle_present: {true: [bicycle, car, motorcycle, airplane, bus, train, truck, boat]}
+      subject:
+        none: []
+        person: [person]
+        animal: [bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe]
+        vehicle: [bicycle, car, motorcycle, airplane, bus, train, truck, boat]
+        food: [banana, apple, sandwich, orange, broccoli, carrot, hot dog, pizza, donut, cake]
+        tableware: [bottle, wine glass, cup, fork, knife, spoon, bowl]
+        furniture: [chair, couch, potted plant, bed, dining table, toilet]
+        electronics: [tv, laptop, mouse, remote, keyboard, cell phone]
+        appliance: [microwave, oven, toaster, sink, refrigerator]
+        sports: [frisbee, skis, snowboard, sports ball, kite, baseball bat, baseball glove, skateboard, surfboard, tennis racket]
+        bag: [backpack, umbrella, handbag, tie, suitcase]
+        street: [traffic light, fire hydrant, stop sign, parking meter, bench]
+        household: [book, clock, vase, scissors, teddy bear, hair drier, toothbrush]
+      animal_type: {none: [], cat: [cat], dog: [dog], bird: [bird], horse: [horse], farm: [sheep, cow], wild: [elephant, bear, zebra, giraffe]}
+      vehicle_type: {none: [], car: [car], bus: [bus], truck: [truck], motorbike: [motorcycle], bicycle: [bicycle], train: [train],
+                     boat: [boat], airplane: [airplane]}
+      thing: same            # every option is the class of the same name; none = no object
+    caption_labels:          # whole-photo answers from the photo's five captions (two must agree; see decidio/rules.py)
+      indoors:
+        true: [kitchen, bathroom, restroom, bedroom, living room, dining room, hotel room, office, room, indoors, inside,
+               restaurant, cafe, classroom, hallway, toilet, bathtub, shower, sink, stove, oven, refrigerator, fridge,
+               microwave, couch, sofa, bed, desk, counter, cabinet, shelf]
+        false: [street, road, sidewalk, outdoors, outside, outdoor, field, grass, grassy, park, beach, ocean, sea, lake,
+                river, sky, mountain, mountains, hill, snow, snowy, forest, woods, trees, tree, garden, yard, highway,
+                runway, tarmac, parking lot, city, tracks, harbor, dock, lawn, dirt, trail, zoo, farm, pasture]
+      place:
+        other: "*"
+        kitchen: [kitchen]
+        bathroom: [bathroom, restroom, toilet, bathtub, shower]
+        bedroom: [bedroom, bed]
+        living_room: [living room, couch, sofa]
+        eating: [dining room, restaurant, dining table, dinner table, cafe]
+        office: [office, desk, cubicle]
+        street: [street, road, sidewalk, intersection, highway, parking lot]
+        green: [park, garden, yard, lawn, field, grass, grassy, pasture]
+        nature: [forest, woods, mountain, mountains, hill, hillside, trail, snow, snowy, slope]
+        water: [beach, ocean, sea, lake, river, harbor, surf, waves, wave]
+      weather:               # an indoor photo has no weather; outdoor COCO photos stay unknown for this question
+        none: [kitchen, bathroom, restroom, bedroom, living room, dining room, office, indoors, room, restaurant]
+  weather:
+    type: folders            # decidio fetch weather  (every 10th photo is kept apart in downloads/weather/test)
+    path: downloads/weather/train
+    labels:
+      weather: {clear: [sun_or_clear], cloudy: [cloudy_or_overcast], rain: [rain_or_strom], snow: [snow_or_frosty],
+                fog: [foggy_or_hazy]}
+      indoors: {false: "*"}  # every weather photo is an outdoor view
+  esc50:
+    type: esc50
+    path: downloads/ESC-50
+    folds: [2, 3, 4, 5]      # fold 1 is the starter set's sounds: kept out, so the starter set is an honest test
+    windows: 3               # loudest 1 s windows per 5 s clip
+    labels: &sounds
+      sound_group:
+        quiet: [quiet]
+        animal: [dog, rooster, pig, cow, frog, cat, hen, insects, sheep, crow]
+        nature: [rain, sea_waves, crackling_fire, crickets, chirping_birds, water_drops, wind, pouring_water, toilet_flush, thunderstorm]
+        human: [crying_baby, sneezing, clapping, breathing, coughing, footsteps, laughing, brushing_teeth, snoring, drinking_sipping]
+        household: [door_wood_knock, mouse_click, keyboard_typing, door_wood_creaks, can_opening, washing_machine, vacuum_cleaner,
+                    clock_alarm, clock_tick, glass_breaking]
+        outside: [helicopter, chainsaw, siren, car_horn, engine, train, church_bells, airplane, fireworks, hand_saw]
+      alert_sound: {true: [siren, car_horn, clock_alarm, glass_breaking, crying_baby, door_wood_knock], false: "*"}
+      speech_present: {false: "*"}
+      home_sound:
+        none: "*"
+        dog: [dog]
+        baby: [crying_baby]
+        cough: [coughing, sneezing]
+        knock: [door_wood_knock]
+        glass: [glass_breaking]
+        alarm: [clock_alarm]
+        water: [pouring_water, water_drops, toilet_flush]
+        appliance: [washing_machine, vacuum_cleaner]
+        footsteps: [footsteps]
+        snoring: [snoring]
+        clap: [clapping]
+      weather_sound: {none: "*", rain: [rain], wind: [wind], thunder: [thunderstorm]}
+      sound: same
+      word: {none: "*"}
+  words:
+    type: speech_commands    # decidio fetch speech-commands  (its testing_list.txt clips are left out: an honest test)
+    path: downloads/speech_commands
+    per_class: 150
+    labels: &speech
+      speech_present: {true: [speech], false: [noise]}
+      sound_group: {speech: [speech]}
+      alert_sound: {false: [speech]}
+      home_sound: {none: [speech]}
+      weather_sound: {none: [speech]}
+      sound: {speech: [speech]}
+      word: same             # the spoken word; unknown for the running speech below
+  speech:
+    type: folders            # decidio fetch librispeech-dev: running speech, so "speech" is not only single words
+    path: downloads/LibriSpeech/dev-clean
+    class: speech
+    per_class: 1500
+    windows: 2
+    labels: *speech
+  quiet:
+    type: quiet              # generated quiet-room clips, class "quiet"
+    count: 400
+    labels: *sounds

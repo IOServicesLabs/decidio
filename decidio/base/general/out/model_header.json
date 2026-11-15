@@ -1,0 +1,297 @@
+{
+  "format": 1,
+  "name": "general",
+  "created": "2026-11-12T12:51:51",
+  "board": "xiao_sense",
+  "image": {
+    "size": 96,
+    "colors": 3,
+    "motion": true,
+    "ego": 0,
+    "platform": "still",
+    "lag": 4,
+    "frame_ms": 50
+  },
+  "audio": {
+    "sr": 16000,
+    "clip": 16000,
+    "win": 480,
+    "hop": 320,
+    "nfft": 512,
+    "n_mels": 40,
+    "fmin": 20.0,
+    "fmax": 7600.0,
+    "mean": -4.220213413238525,
+    "std": 4.830543041229248,
+    "eps": 1e-06
+  },
+  "n_logits": 81,
+  "arena_kb": 144,
+  "questions": [
+    {
+      "id": "person_present",
+      "type": "noul",
+      "options": [
+        "false",
+        "true"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "animal_present",
+      "type": "noul",
+      "options": [
+        "false",
+        "true"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "vehicle_present",
+      "type": "noul",
+      "options": [
+        "false",
+        "true"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "subject",
+      "type": "choice",
+      "options": [
+        "none",
+        "person",
+        "animal",
+        "vehicle",
+        "food",
+        "tableware",
+        "furniture",
+        "electronics",
+        "appliance",
+        "sports",
+        "bag",
+        "street",
+        "household"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "animal_type",
+      "type": "choice",
+      "options": [
+        "none",
+        "cat",
+        "dog",
+        "bird",
+        "horse",
+        "farm",
+        "wild"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "vehicle_type",
+      "type": "choice",
+      "options": [
+        "none",
+        "car",
+        "bus",
+        "truck",
+        "motorbike",
+        "bicycle",
+        "train",
+        "boat",
+        "airplane"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "indoors",
+      "type": "noul",
+      "options": [
+        "false",
+        "true"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "place",
+      "type": "choice",
+      "options": [
+        "other",
+        "kitchen",
+        "bathroom",
+        "bedroom",
+        "living_room",
+        "eating",
+        "office",
+        "street",
+        "green",
+        "nature",
+        "water"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "weather",
+      "type": "choice",
+      "options": [
+        "none",
+        "clear",
+        "cloudy",
+        "rain",
+        "snow",
+        "fog"
+      ],
+      "m": "i"
+    },
+    {
+      "id": "sound_group",
+      "type": "choice",
+      "options": [
+        "quiet",
+        "animal",
+        "nature",
+        "human",
+        "speech",
+        "household",
+        "outside"
+      ],
+      "m": "a"
+    },
+    {
+      "id": "alert_sound",
+      "type": "noul",
+      "options": [
+        "false",
+        "true"
+      ],
+      "m": "a"
+    },
+    {
+      "id": "speech_present",
+      "type": "noul",
+      "options": [
+        "false",
+        "true"
+      ],
+      "m": "a"
+    },
+    {
+      "id": "home_sound",
+      "type": "choice",
+      "options": [
+        "none",
+        "dog",
+        "baby",
+        "cough",
+        "knock",
+        "glass",
+        "alarm",
+        "water",
+        "appliance",
+        "footsteps",
+        "snoring",
+        "clap"
+      ],
+      "m": "a"
+    },
+    {
+      "id": "weather_sound",
+      "type": "choice",
+      "options": [
+        "none",
+        "rain",
+        "wind",
+        "thunder"
+      ],
+      "m": "a"
+    }
+  ],
+  "actions": [
+    {
+      "name": "person",
+      "when": [
+        {
+          "q": "person_present",
+          "o": "true",
+          "op": ">=",
+          "p": 0.8
+        }
+      ],
+      "for_ms": 300,
+      "hold_ms": 2000,
+      "on": "start",
+      "gpio": -1,
+      "level": 1,
+      "text": "",
+      "notify": true,
+      "photo": false,
+      "cooldown_s": 60,
+      "count": false
+    },
+    {
+      "name": "alert",
+      "when": [
+        {
+          "q": "alert_sound",
+          "o": "true",
+          "op": ">=",
+          "p": 0.8
+        }
+      ],
+      "for_ms": 300,
+      "hold_ms": 2000,
+      "on": "start",
+      "gpio": -1,
+      "level": 1,
+      "text": "",
+      "notify": true,
+      "photo": false,
+      "cooldown_s": 60,
+      "count": false
+    },
+    {
+      "name": "raining",
+      "when": [
+        {
+          "q": "weather",
+          "o": "rain",
+          "op": ">=",
+          "p": 0.7
+        }
+      ],
+      "for_ms": 2000,
+      "hold_ms": 60000,
+      "on": "start",
+      "gpio": -1,
+      "level": 1,
+      "text": "",
+      "notify": true,
+      "photo": false,
+      "cooldown_s": 60,
+      "count": false
+    },
+    {
+      "name": "speech",
+      "when": [
+        {
+          "q": "speech_present",
+          "o": "true",
+          "op": ">=",
+          "p": 0.8
+        }
+      ],
+      "for_ms": 300,
+      "hold_ms": 2000,
+      "on": "start",
+      "gpio": -1,
+      "level": 1,
+      "text": "",
+      "notify": true,
+      "photo": false,
+      "cooldown_s": 60,
+      "count": false
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+decidio
+Copyright 2026 IO Services
+
+The source code in this repository is licensed under the Apache License,
+Version 2.0. See LICENSE for the full text.
+
+The trained models, the files made from them and some data tables are not only
+under that licence. They were made from public datasets, and the terms of those
+datasets also apply. The sections below list the datasets and the files that
+they affect. No dataset files are in this repository.
+
+
+1. Model weights and builds
+---------------------------
+
+The base model "general" (camera and microphone):
+
+  decidio/base/general/out/model.keras
+  decidio/base/general/out/model_int8.tflite
+  decidio/base/general/out/model.dcd
+
+  Every build for a board with a microphone carries this model:
+  installer/builds/xiao_sense/*.dcd (made by tools/make_builds.py), and every
+  package that `decidio install` sends to such a board.
+
+  Trained on:
+  - COCO 2017 train2017 photos and annotations (cocodataset.org).
+    Annotations: CC BY 4.0. Photos: the Flickr licence of each photo.
+  - ESC-50, folds 2 to 5 (K. J. Piczak). CC BY-NC 3.0: non-commercial use only.
+  - Speech Commands v0.02 (Google). CC BY 4.0.
+  - LibriSpeech dev-clean (openslr.org). CC BY 4.0.
+  - WeatherNet-05-18039 (Hugging Face, prithivMLmods). Its uploader lists it
+    as Apache 2.0. The origin of the photos is not stated.
+  - Starting point of the vision body: ImageNet-pretrained MobileNetV1 weights
+    from Keras. Apache 2.0.
+
+  Because of ESC-50, do not use this model or the builds that carry it for
+  commercial purposes.
+
+The base model "general-cam" (camera only):
+
+  decidio/base/general-cam/out/model.keras
+  decidio/base/general-cam/out/model_int8.tflite
+  decidio/base/general-cam/out/model.dcd
+
+  Every build for a board without a microphone carries this model:
+  installer/builds/s3cam/*.dcd, and every package that `decidio install` sends
+  to such a board.
+
+  Trained on the COCO 2017 photos, the WeatherNet-05-18039 photos and the
+  MobileNetV1 weights listed above. It contains no sound data.
+
+
+2. Data tables in this repository
+---------------------------------
+
+  decidio/starter_data/coco_starter.json.gz
+    A list of COCO 2017 val2017 photos with their annotations.
+    Annotations: CC BY 4.0. The photos are not included.
+
+  decidio/starter_data/esc50_starter.csv
+    The file names and labels of ESC-50 fold 1 (K. J. Piczak).
+    CC BY-NC 3.0. The sound files are not included.
+
+  firmware/main/fly/circuit_data.h
+  firmware/main/fly/optic_lobe_data.h
+    Connection tables derived from the male-cns v1.0 connectome of
+    Drosophila melanogaster (Janelia FlyEM Project and the University of
+    Cambridge). CC BY 4.0. These tables are also compiled into the firmware.
+
+
+3. Third-party code in the firmware binaries
+--------------------------------------------
+
+The prebuilt firmware (decidio/firmware_bins/esp32s3/*.bin and
+installer/builds/firmware.bin) is compiled from firmware/ together with these
+components. Their source is not in this repository.
+
+  ESP-IDF 5.5 (Espressif Systems)          Apache-2.0. It includes third-party
+                                           components under their own licences,
+                                           for example FreeRTOS (MIT), lwIP
+                                           (BSD-3-Clause), Mbed TLS (Apache-2.0)
+                                           and cJSON (MIT).
+  espressif/esp-tflite-micro (TensorFlow Lite Micro)   Apache-2.0
+  espressif/esp-nn                                     Apache-2.0
+  espressif/esp32-camera                               Apache-2.0
+  espressif/mdns                                       Apache-2.0
+
+The browser installer (installer/index.html) loads ESP Web Tools from
+unpkg.com when the page opens (Apache-2.0). It is not in this repository.

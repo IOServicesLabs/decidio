@@ -1,0 +1,25 @@
+# decidio project: classify what the camera sees, from your own photo folders (<folder>/<class>/*.jpg).
+name: image-classes
+board: s3cam
+
+inputs:
+  image: {size: 96, color: rgb, motion: false}
+
+model:
+  preset: small
+
+questions:
+  what:
+    type: choice
+    instructions: "What is in front of the camera?"
+    criteria:
+      nothing: "nothing in particular"
+      cat: "a cat"
+      dog: "a dog"
+      package: "a parcel or package"
+
+sources:
+  photos:
+    type: folders            # photos/<option>/*.jpg  - folder names must be option ids (or use labels: to map)
+    path: photos
+    question: what

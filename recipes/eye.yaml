@@ -1,0 +1,62 @@
+# Recipes: the fly eye (ideas 106-111 in USE_CASES.md). One entry per idea.
+#
+# The eye is not the model. It looks at the whole camera frame as 40 x 30 points, about 15 times a second, and finds
+# what moves against the background. It gives numbers a rule can test with > or <:
+#
+#   eye_moving       1 while it follows a moving figure, else 0
+#   eye_figures      how many figures it follows (0 to 4)
+#   eye_approach     how fast the nearest figure grows in view (0 = not at all; 0.01 is a clear approach)
+#   eye_new          1 for 3 seconds after a new figure came into view
+#   eye_changed      1 for 3 seconds after something in view was moved, added or taken away
+#   eye_self_motion  how much the whole picture moves: the board itself is moving
+#
+# It sees movement only. A person who stands still fades out after a few seconds. The eye needs a camera, and must be
+# on (Eye tab). These thresholds are starting points: they were not tuned with people in front of the boards.
+
+- id: anything-moves
+  idea: 106
+  title: Something moves in view
+  setup: Fix the board so it does not shake, and point the camera at the place to watch. Any moving thing fires it, of any kind. Watch the Eye tab first to see what it follows in your room.
+  rules:
+    - {name: moving, when: eye_moving > 0.5, for_ms: 500, hold_ms: 10000,
+       notify: {text: "Something is moving in view", cooldown_s: 120}}
+
+- id: moves-but-no-person
+  idea: 107
+  title: Something moves and it is not a person
+  setup: Point the camera at a room that should be still, for example where a pet is not allowed or where a robot vacuum runs. The model must also say that no person is in view.
+  rules:
+    - {name: moving_no_person, when: [eye_moving > 0.5, person_present != true @ 0.7], for_ms: 1500, hold_ms: 15000,
+       notify: {text: "Something that is not a person is moving", cooldown_s: 300}}
+
+- id: person-moving
+  idea: 108
+  title: A person who moves (not a photo or a poster)
+  setup: Point the camera at a door or a path. The model must see a person and the eye must see movement, so a picture of a person on a wall or a screen does not fire it.
+  rules:
+    - {name: person_moving, when: [person_present = true @ 0.7, eye_moving > 0.5], for_ms: 300, hold_ms: 15000,
+       notify: {text: "A person is moving in view", cooldown_s: 120}}
+
+- id: something-approaches
+  idea: 109
+  title: Something comes toward the camera
+  setup: Point the camera along a path, a corridor or a driveway, so that things come toward it and not across it. Look at eye_approach on the Live tab while you walk toward the board, and set the threshold below that.
+  rules:
+    - {name: approaching, when: eye_approach > 0.01, for_ms: 300, hold_ms: 8000,
+       notify: {text: "Something is coming toward the camera", cooldown_s: 60}}
+
+- id: scene-changed
+  idea: 110
+  title: Something was moved, added or taken away
+  setup: Fix the board and point the camera at a shelf, a desk or a parking place. It fires when the picture stays different after the movement has stopped. A large change of light can also fire it.
+  rules:
+    - {name: scene_changed, when: eye_changed > 0.5, for_ms: 0, hold_ms: 10000,
+       notify: {text: "Something in view was moved, added or taken away", cooldown_s: 300}}
+
+- id: board-was-moved
+  idea: 111
+  title: The board itself was moved
+  setup: Fix the board. It fires when the whole picture moves for a second, which means that the camera was turned, knocked or carried away. A large thing that fills the view can also fire it.
+  rules:
+    - {name: board_moved, when: eye_self_motion > 0.1, for_ms: 1000, hold_ms: 10000,
+       notify: {text: "The board was moved", cooldown_s: 300}}

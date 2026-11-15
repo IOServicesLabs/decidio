@@ -1,0 +1,41 @@
+# decidio project: sound events from the microphone only (alarms, glass, dogs, knocking ...). Starts from ESC-50.
+name: sound-events
+board: xiao_sense
+
+inputs:
+  audio: {sample_rate: 16000, clip_seconds: 1.0}
+
+model:
+  preset: small
+
+questions:
+  sound:
+    type: choice
+    instructions: "Which sound is the most prominent?"
+    criteria:
+      none: "background or other sounds"
+      alarm: "an alarm clock, siren or beeping"
+      glass: "glass breaking"
+      dog: "a dog barking"
+      baby: "a baby crying"
+      knock: "knocking on a door"
+      speech_like: "laughing, coughing or sneezing"
+
+actions:
+  - {name: glass, when: sound = glass, above: 0.7, for_ms: 0, gpio: -1, hold_ms: 3000}
+  - {name: alarm, when: sound = alarm, above: 0.7, for_ms: 500, gpio: -1, hold_ms: 3000}
+
+sources:
+  esc50:
+    type: esc50
+    path: downloads/ESC-50
+    windows: 2
+    labels:
+      sound:
+        alarm: [clock_alarm, siren, church_bells]
+        glass: [glass_breaking]
+        dog: [dog]
+        baby: [crying_baby]
+        knock: [door_wood_knock]
+        speech_like: [laughing, coughing, sneezing]
+        none: "*"

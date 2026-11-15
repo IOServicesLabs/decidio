@@ -1,0 +1,91 @@
+# decidio project: people and vehicles from the camera, vehicle sounds from the microphone.
+# Ready to train from public data: decidio fetch voc2007 esc50 && decidio import && decidio run
+name: person-vehicle
+board: xiao_sense            # xiao_sense (camera + mic) | s3cam (camera only: remove inputs.audio and the audio question)
+
+inputs:
+  image:
+    size: 96                 # model input edge, 16..96 (64 = ~2x faster vision branch)
+    color: gray              # gray | rgb
+    motion: true             # extra channel: |frame - frame 200 ms earlier|
+  audio:
+    sample_rate: 16000
+    clip_seconds: 1.0
+
+model:
+  preset: small
+  backbone: mobilenet_v1_0.25   # ImageNet-pretrained MobileNetV1 (transfer learning); tiny = from scratch
+
+train:
+  epochs: 15
+  max_per_epoch: 12000
+
+questions:
+  person_present:
+    type: noul
+    modality: image
+    instructions: "Is at least one person clearly visible in the frame?"
+    criteria: {true: "a photo with a person in it", false: "a photo with no people in it"}
+
+  vehicle_present:
+    type: noul
+    modality: image
+    instructions: "Is a vehicle (car, van, bus, motorbike or bicycle) clearly visible?"
+    criteria: {true: "a photo with a car, bus, motorbike or bicycle in it", false: "a photo with no vehicles in it"}
+
+  vehicle_type:
+    type: choice
+    modality: image
+    instructions: "What is the most prominent vehicle in the frame?"
+    criteria:
+      none: "no vehicle"
+      car: "a car or van"
+      bus: "a bus"
+      motorbike: "a motorbike or scooter"
+      bicycle: "a bicycle"
+
+  vehicle_sound:
+    type: choice
+    modality: audio
+    instructions: "Is a vehicle sound audible?"
+    criteria:
+      none: "no vehicle sound"
+      engine: "an engine running"
+      horn: "a car horn"
+      siren: "a siren"
+
+actions:                     # optional: GPIO / event rules run on the board after every decision
+  - name: person
+    when: person_present = true
+    above: 0.8               # probability
+    for_ms: 300              # must hold this long
+    gpio: -1                 # -1 = event line only; e.g. 21 drives the XIAO's LED (level 0 = on)
+    level: 1
+    hold_ms: 2000
+  - name: siren
+    when: vehicle_sound = siren
+    above: 0.7
+    for_ms: 500
+    gpio: -1
+
+sources:                     # decidio import  (paths are relative to this folder)
+  voc2007:
+    type: voc
+    paths: [downloads/VOCtrainval_06-Nov-2007.zip, downloads/VOCtest_06-Nov-2007.zip]
+    crops: 2                 # square crops per photo
+    min_size: 0.12           # an object smaller than this share of the frame is "unknown", not "absent"
+    labels:
+      person_present: {true: [person]}
+      vehicle_present: {true: [car, bus, motorbike, bicycle]}
+      vehicle_type: {car: [car], bus: [bus], motorbike: [motorbike], bicycle: [bicycle], none: []}
+  esc50:
+    type: esc50
+    path: downloads/ESC-50
+    windows: 2               # loudest 1 s windows per 5 s clip
+    labels:
+      vehicle_sound: {engine: [engine], horn: [car_horn], siren: [siren], none: "*"}
+  # urbansound8k:            # 10-25x more vehicle-sound clips than ESC-50: decidio fetch urbansound8k (6 GB), then uncomment
+  #   type: urbansound8k
+  #   path: downloads/UrbanSound8K
+  #   labels:
+  #     vehicle_sound: {engine: [engine_idling], horn: [car_horn], siren: [siren], none: "*"}

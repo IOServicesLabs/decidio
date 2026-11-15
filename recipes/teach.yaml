@@ -1,0 +1,73 @@
+# Ideas that need a question the base models do not answer (the "teach" rows in USE_CASES.md).
+# These are not installable builds. Each says what to record; then, in a project made with
+# `decidio new my-idea -t teach`, add the question, import your examples and run `decidio teach` (about a minute).
+# GUIDE.md section 2 has the full walk-through. Whether a taught question works depends on your examples; measure it.
+#
+#   kind      image: photos or `decidio collect` frames from the board | sound: one-second clips
+#   question  a name for the new question and its answers
+#   record    what the examples of each answer should be
+
+- {id: smoke-alarm, idea: 28, status: teach, kind: sound, title: Smoke alarm beeping, question: "smoke_alarm: [false, true]",
+   record: "true: your own alarm's test beep from several rooms and distances. false: the starter set plus other beeps at home (microwave, timer)."}
+- {id: appliance-beep, idea: 29, status: teach, kind: sound, title: "Doorbell, kettle or microwave beep", question: "beep: [none, doorbell, kettle, microwave]",
+   record: "A few dozen clips of each of your own devices, at the distance the board will sit. none: the starter set."}
+- {id: music-playing, idea: 30, status: teach, kind: sound, title: Music playing, question: "music: [false, true]",
+   record: "true: clips of the music you play, from your speakers, at several volumes. false: the starter set, speech and TV dialogue."}
+- {id: parcel-on-doorstep, idea: 31, status: teach, kind: image, title: Parcel on the doorstep, question: "parcel: [false, true]",
+   record: "true: boxes and bags on your doorstep, in different light. false: the empty doorstep at the same times of day, and people standing on it."}
+- {id: mail-in-mailbox, idea: 32, status: teach, kind: image, title: Mail in the mailbox, question: "mail: [false, true]",
+   record: "Camera inside the box with a light. true: letters and leaflets in it. false: the empty box."}
+- {id: garage-door, idea: 33, status: teach, kind: image, title: Garage door open or closed, question: "garage_door: [closed, open]",
+   record: "Frames of the door in each state, day and night, with and without the car."}
+- {id: window-left-open, idea: 34, status: teach, kind: image, title: Window or door left open, question: "window: [closed, open]",
+   record: "Frames of the window in each state, including tilted, with curtains in both positions."}
+- {id: fridge-door-open, idea: 35, status: teach, kind: image, title: Fridge door left open, question: "fridge_door: [closed, open]",
+   record: "Frames of the fridge from where the board will sit, door closed and at several open angles. Add a rule with for_ms 120000."}
+- {id: stove-unattended, idea: 36, status: teach, kind: image, title: Stove on with nobody in the kitchen, question: "stove_on: [false, true]",
+   record: "true: pans on lit rings or glowing plates. false: the stove off, with and without pans. Combine in a rule with person_present != true."}
+- {id: candle-unattended, idea: 37, status: teach, kind: image, title: Candle or fireplace left unattended, question: "flame: [false, true]",
+   record: "true: the candle or fire lit, in dim and bright rooms. false: the same view unlit, and with lamps on. Combine with person_present != true."}
+- {id: pet-on-the-couch, idea: 38, status: teach, kind: image, title: Pet on the couch or the counter, question: "pet_on_couch: [false, true]",
+   record: "true: your pet on the couch in several spots. false: the empty couch, people on it, the pet on the floor."}
+- {id: pet-bowl-empty, idea: 39, status: teach, kind: image, title: Pet bowl empty, question: "bowl: [empty, has_food]",
+   record: "Frames looking down at the bowl, empty and at several fill levels."}
+- {id: bins-out, idea: 40, status: teach, kind: image, title: Bins out on bin day, question: "bins_out: [false, true]",
+   record: "Frames of the kerb with and without the bins, in different light and weather."}
+- {id: plant-wilting, idea: 41, status: teach, kind: image, title: Plant wilting, question: "plant: [fine, wilting]",
+   record: "Frames of the same plant watered and drooping. Expect to need many days of examples; the change is small."}
+- {id: print-failed, idea: 42, status: teach, kind: image, title: 3D print failed, question: "print: [fine, failed]",
+   record: "Frames of the bed during good prints and of spaghetti or a detached part. Failures are rare: collect them over time."}
+- {id: puddle-under-sink, idea: 43, status: teach, kind: image, title: Puddle under the sink, question: "puddle: [false, true]",
+   record: "Camera and a light under the sink. true: water on the floor, small and large. false: the dry floor."}
+- {id: thud-then-silence, idea: 44, status: teach, kind: sound, title: "A thud, then silence", question: "thud: [false, true]",
+   record: "true: heavy objects dropped on your floors. false: the starter set, doors closing, footsteps. A rule can add the silence; it cannot tell a fall from a dropped box. Not a safety device."}
+- {id: wake-word, idea: 56, status: teach, kind: sound, title: A spoken command or wake word, question: "command: [none, your_word]",
+   record: "A hundred or more clips of the word from the people who will say it, near and far. none: the starter set and other speech. Teaching a new word has not been measured."}
+- {id: name-called, idea: 65, status: teach, kind: sound, title: Your name called, question: "my_name: [false, true]",
+   record: "As for a wake word: your name said by several people, and other speech as false."}
+- {id: keys-in-view, idea: 66, status: teach, kind: image, title: "Keys, wallet, bag in view when leaving", question: "item: [none, keys, wallet, bag]",
+   record: "Frames of each item on the shelf by the door, alone and together, and the empty shelf."}
+- {id: crossing-light, idea: 67, status: teach, kind: image, title: Crossing light red or green, question: "crossing: [none, red, green]",
+   record: "Frames of crossing lights in each state from where you would stand, day and night. Do not use it to decide when to cross."}
+- {id: hand-sign, idea: 68, status: teach, kind: image, title: A hand sign in front of the camera, question: "sign: [none, open_hand, fist, thumbs_up]",
+   record: "Fifty or more frames of each sign at arm's length against several backgrounds, and frames with no hand."}
+- {id: eye-strain-timer, idea: 69, status: teach, kind: image, title: "Reading, screen or distance", question: "looking_at: [far, screen, page]",
+   record: "Frames from a forward-facing camera while reading a book, using a screen and looking across a room or outdoors."}
+- {id: shelf-queue-conveyor, idea: 77, status: teach, kind: image, title: "Shelf empty, queue present, item on the conveyor", question: "state: [empty, present]",
+   record: "Frames of your own shelf, queue or belt in each state from the fixed camera position."}
+- {id: helmet-worn, idea: 78, status: teach, kind: image, title: Helmet or hi-vis worn, question: "helmet: [none, no_helmet, helmet]",
+   record: "Frames of people with and without the gear at the distance of the gate, and frames with nobody."}
+- {id: machine-sounds-wrong, idea: 79, status: teach, kind: sound, title: A machine that sounds wrong, question: "machine: [normal, fault]",
+   record: "Many minutes of the machine running normally, and every faulty run you can get. Likely needs a fine-tune (`decidio run`), not a quick teach."}
+- {id: beehive-state, idea: 80, status: teach, kind: sound, title: Beehive sound state, question: "hive: [normal, queenless, swarming]",
+   record: "Recordings from inside the hive in each state. Likely needs a fine-tune (`decidio run`)."}
+- {id: typing-at-desk, idea: 99, status: teach, kind: sound, title: "Someone at the desk, from typing", question: "typing: [false, true]",
+   record: "true: your keyboard from where the board sits. false: the starter set and the room's other sounds."}
+- {id: door-by-sound, idea: 100, status: teach, kind: sound, title: "Door opened or closed, by its sound", question: "door: [none, opened, closed]",
+   record: "Clips of your own door opening and closing, gently and firmly. none: the starter set and footsteps."}
+- {id: knock-pattern, idea: 101, status: teach, kind: sound, title: A knock or tap pattern as a switch, question: "tap: [none, double_tap]",
+   record: "Clips of your pattern on the actual table, and of single knocks and other bumps as none."}
+- {id: fridge-or-pump-running, idea: 104, status: teach, kind: sound, title: "Fridge, heating or pump running", question: "running: [false, true]",
+   record: "Clips with the compressor or pump on and off, from where the board will sit. A rule with `count: daily` gives minutes running."}
+- {id: boiling-over, idea: 105, status: teach, kind: sound, title: "Pan boiling over, kettle boiling", question: "boiling: [false, true]",
+   record: "Clips of a rolling boil and of water hissing on the hob. false: simmering, frying and kitchen talk."}

@@ -1,0 +1,15 @@
+{
+  "chip": "esp32s3",
+  "flash_files": {
+    "0x0": "bootloader.bin",
+    "0x10000": "decidio_rt.bin",
+    "0x8000": "partition-table.bin",
+    "0xd000": "ota_data_initial.bin"
+  },
+  "flash_settings": {
+    "flash_mode": "dio",
+    "flash_size": "8MB",
+    "flash_freq": "80m"
+  },
+  "model_offset": "0x510000"
+}

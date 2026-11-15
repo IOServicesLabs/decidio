@@ -1,0 +1,7 @@
+# The parts that are necessary to install an idea on a board (no TensorFlow).
+# Use:  pip install --no-deps -e .   then   pip install -r requirements-install.txt
+pyserial
+esptool>=4.8
+pyyaml
+numpy
+pillow

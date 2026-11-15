@@ -1,0 +1,54 @@
+# decidio project: people and vehicles from a camera that moves - a drone, a car, a bike, a hand.
+# Camera only (any board). Trained with simulated camera motion (pan, tilt, forward travel, roll, shake, blur,
+# rolling-shutter lean); the motion channel has the camera's own shift taken out on the board (motion: ego).
+name: moving-camera
+board: s3cam                 # xiao_sense works too
+
+inputs:
+  image:
+    size: 96
+    color: gray
+    motion: ego              # |now - frame 100 ms earlier, moved back by the camera's own shift|
+    motion_ms: 100           # shorter than a still camera's 200 ms: less to cancel at speed
+    platform: moving         # train + validate with simulated camera motion
+
+model:
+  preset: small
+  backbone: mobilenet_v1_0.25
+
+train:
+  epochs: 15
+  max_per_epoch: 12000
+
+questions:
+  person_present:
+    type: noul
+    instructions: "Is at least one person clearly visible in the frame?"
+    criteria: {true: "a photo with a person in it", false: "a photo with no people in it"}
+  vehicle_present:
+    type: noul
+    instructions: "Is a vehicle (car, van, bus, motorbike or bicycle) clearly visible?"
+    criteria: {true: "a photo with a car, bus, motorbike or bicycle in it", false: "a photo with no vehicles in it"}
+  vehicle_type:
+    type: choice
+    instructions: "What is the most prominent vehicle in the frame?"
+    criteria: {none: "no vehicle", car: "a car or van", bus: "a bus", motorbike: "a motorbike or scooter", bicycle: "a bicycle"}
+
+actions:
+  - name: person
+    when: person_present = true
+    above: 0.8
+    for_ms: 300
+    gpio: -1
+    hold_ms: 2000
+
+sources:
+  voc2007:
+    type: voc
+    paths: [downloads/VOCtrainval_06-Nov-2007.zip, downloads/VOCtest_06-Nov-2007.zip]
+    crops: 2
+    min_size: 0.12
+    labels:
+      person_present: {true: [person]}
+      vehicle_present: {true: [car, bus, motorbike, bicycle]}
+      vehicle_type: {car: [car], bus: [bus], motorbike: [motorbike], bicycle: [bicycle], none: []}

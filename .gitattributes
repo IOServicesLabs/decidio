@@ -1,0 +1,24 @@
+# Text: store with LF, check out with LF on every system.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary: never convert, never diff as text.
+*.bin binary
+*.dcd binary
+*.tflite binary
+*.keras binary
+*.h5 binary
+*.npz binary
+*.gz binary
+*.zip binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.ico binary
+*.wav binary
+
+# Generated data tables (see NOTICE)
+firmware/main/fly/circuit_data.h linguist-generated
+firmware/main/fly/optic_lobe_data.h linguist-generated

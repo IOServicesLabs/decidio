@@ -1,0 +1,63 @@
+[build-system]
+# 77 or later: needed for the SPDX `license` string and `license-files` below.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "decidio"
+version = "0.4.0"
+description = "Install, teach and train small decision models for ESP32-S3 camera boards."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "IO Services" }]
+requires-python = ">=3.10"
+keywords = ["esp32", "esp32-s3", "esp-idf", "tflite-micro", "tinyml", "camera", "microphone", "classification",
+            "microcontroller", "home-automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: C",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Home Automation",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+  "Topic :: Software Development :: Embedded Systems",
+]
+dependencies = [
+  "tensorflow>=2.16,<2.22",
+  "tf_keras>=2.16,<2.22",
+  "numpy",
+  "pyyaml",
+  "pillow",
+  "pyserial",
+  "esptool>=4.8",
+  "imageio-ffmpeg",
+]
+
+[project.optional-dependencies]
+teacher = ["torch", "transformers>=4.45", "accelerate", "huggingface_hub"]
+test = ["pytest", "tflite-micro"]
+
+[project.urls]
+Homepage = "https://github.com/IOServicesLabs/decidio"
+Installer = "https://ioserviceslabs.github.io/decidio/"
+Issues = "https://github.com/IOServicesLabs/decidio/issues"
+Changelog = "https://github.com/IOServicesLabs/decidio/blob/main/CHANGELOG.md"
+
+[project.scripts]
+decidio = "decidio.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["decidio*"]
+
+[tool.setuptools.package-data]
+decidio = ["templates/*.yaml", "web/*", "firmware_bins/*/*", "firmware_bins/*.md", "starter_data/*", "base/*/*.yaml", "base/*/out/*",
+           "recipes.json"]

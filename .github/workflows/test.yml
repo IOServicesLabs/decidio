@@ -1,0 +1,82 @@
+name: test
+
+# The tests that need no TensorFlow and no board: the package, the recipes and the builds, and the firmware's C code
+# (rules, model loader, log-mel, camera shift) compiled with gcc and compared with the Python side.
+# The one TensorFlow test is in the job "tensorflow", which runs only when started by hand (Actions > test > Run workflow).
+# tests/test_tflm_parity.py is not run here: it needs a project with its downloaded dataset.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CUDA_VISIBLE_DEVICES: "-1"
+  CJSON_VERSION: v1.7.19    # the cJSON that ESP-IDF 5.5 compiles into the firmware
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install decidio without TensorFlow
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-deps -e .
+          pip install -r requirements-install.txt pytest
+
+      # The firmware parses JSON with cJSON (part of ESP-IDF). The C tests compile it for the PC.
+      - name: Get the cJSON source
+        run: |
+          git clone --quiet --depth 1 --branch "$CJSON_VERSION" https://github.com/DaveGamble/cJSON.git "$RUNNER_TEMP/cJSON"
+          echo "CJSON_DIR=$RUNNER_TEMP/cJSON" >> "$GITHUB_ENV"
+
+      - name: Run the tests
+        run: python -m pytest -rs tests
+
+      - name: Read the shipped base models with the firmware's loader
+        run: |
+          python tests/test_model_loader.py decidio/base/general "$CJSON_DIR"
+          python tests/test_model_loader.py decidio/base/general-cam "$CJSON_DIR"
+
+      - name: Run the command
+        run: |
+          decidio --version
+          decidio builds > /dev/null
+
+  tensorflow:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # On Linux the tensorflow wheel has no CUDA libraries (they come only with tensorflow[and-cuda]).
+      - name: Install decidio with TensorFlow (CPU)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest
+
+      - name: Run the TensorFlow test
+        run: python -m pytest -rs tests/test_base_projects.py
