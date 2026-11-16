@@ -34,7 +34,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -74,7 +75,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -114,7 +116,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -155,7 +158,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "vehicle_ahead",
@@ -176,7 +180,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -216,7 +221,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "outdoors",
@@ -237,7 +243,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -284,7 +291,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 3600,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -327,7 +335,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    },
    {
     "name": "at_a_desk",
@@ -348,7 +357,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    },
    {
     "name": "on_the_street",
@@ -369,7 +379,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    },
    {
     "name": "in_nature",
@@ -390,7 +401,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    },
    {
     "name": "eating",
@@ -411,7 +423,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    },
    {
     "name": "in_the_rain",
@@ -432,7 +445,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -471,7 +485,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -510,7 +525,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -549,7 +565,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -588,7 +605,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -627,7 +645,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -666,7 +685,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -706,7 +726,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -746,7 +767,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -786,7 +808,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -826,7 +849,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -866,7 +890,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 120,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -906,7 +931,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -945,7 +971,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 120,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -991,7 +1018,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1037,7 +1065,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 120,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1076,7 +1105,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1115,7 +1145,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1154,7 +1185,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1194,7 +1226,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1241,7 +1274,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 1800,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1281,7 +1315,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1321,7 +1356,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1361,7 +1397,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1401,7 +1438,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "dog_at_door",
@@ -1422,7 +1460,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1462,7 +1501,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 900,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -1502,7 +1542,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 600,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1543,6 +1584,7 @@
     "photo": false,
     "cooldown_s": 3600,
     "count": false,
+    "urgent": false,
     "hours": [
      1020,
      1380
@@ -1585,7 +1627,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 30,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1624,7 +1667,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 30,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1663,7 +1707,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 120,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1702,7 +1747,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 600,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -1741,7 +1787,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 900,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1780,7 +1827,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 600,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1820,6 +1868,7 @@
     "photo": false,
     "cooldown_s": 60,
     "count": true,
+    "urgent": false,
     "hours": [
      1320,
      420
@@ -1845,6 +1894,7 @@
     "photo": false,
     "cooldown_s": 60,
     "count": true,
+    "urgent": false,
     "hours": [
      1320,
      420
@@ -1888,6 +1938,7 @@
     "photo": false,
     "cooldown_s": 600,
     "count": true,
+    "urgent": false,
     "hours": [
      1320,
      420
@@ -1930,7 +1981,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -1970,7 +2022,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 3600,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "rain_heard",
@@ -1991,7 +2044,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 3600,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2031,7 +2085,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2071,7 +2126,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 3600,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2111,7 +2167,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2151,7 +2208,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "overcast",
@@ -2172,7 +2230,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2211,7 +2270,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 600,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2250,7 +2310,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 1800,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2291,6 +2352,7 @@
     "photo": false,
     "cooldown_s": 3600,
     "count": false,
+    "urgent": false,
     "hours": [
      360,
      605
@@ -2334,7 +2396,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "bedroom",
@@ -2355,7 +2418,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "living_room",
@@ -2376,7 +2440,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "bathroom",
@@ -2397,7 +2462,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "office",
@@ -2418,7 +2484,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2459,7 +2526,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "animal",
@@ -2480,7 +2548,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 300,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2520,7 +2589,8 @@
     "notify": true,
     "photo": true,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -2560,7 +2630,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -2600,7 +2671,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2641,7 +2713,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "clap",
@@ -2662,7 +2735,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "voice",
@@ -2683,7 +2757,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2724,7 +2799,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "footsteps",
@@ -2745,7 +2821,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    },
    {
     "name": "not_quiet",
@@ -2766,7 +2843,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2805,7 +2883,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 900,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -2844,7 +2923,8 @@
     "notify": true,
     "photo": false,
     "cooldown_s": 3600,
-    "count": true
+    "count": true,
+    "urgent": false
    }
   ]
  },
@@ -2883,7 +2963,8 @@
     "notify": false,
     "photo": false,
     "cooldown_s": 60,
-    "count": false
+    "count": false,
+    "urgent": false
    }
   ]
  },
@@ -2923,6 +3004,7 @@
     "photo": false,
     "cooldown_s": 300,
     "count": false,
+    "urgent": false,
     "hours": [
      540,
      1020
@@ -2966,6 +3048,7 @@
     "photo": false,
     "cooldown_s": 300,
     "count": false,
+    "urgent": false,
     "hours": [
      30,
      330

@@ -15,6 +15,7 @@
 //   radio scan | radio <channel> [sender] | radio off      (radio.c)
 //   wifi | wifi "<network name>" "<password>" | wifi forget | wifi off      (wifi.c)
 //   alert test telegram|webhook|mqtt|probe | alert set <key> <value>        (alert.c; keys as in web.c)
+//   power | power on|off | power stay|go | power wakes <n>          low-power mode (power.c)
 //   mem
 // An argument with spaces goes in double quotes.
 #include <stdio.h>
@@ -280,6 +281,10 @@ static void handle(char *line)
             return;
         }
         printf("{\"mic_probe\":{\"clk\":%d,\"din\":%d,\"spread\":%d}}\n", atoi(clk), atoi(din), rt_audio_probe(atoi(clk), atoi(din)));
+    } else if (!strcmp(cmd, "power")) {
+        if (!rt_power_command(arg, next_arg(&p))) {
+            return;
+        }
     } else if (!strcmp(cmd, "mem")) {
         printf("{\"mem\":{\"heap_internal\":%u,\"heap_min\":%u,\"largest\":%u,\"psram\":%u}}\n",
                (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),

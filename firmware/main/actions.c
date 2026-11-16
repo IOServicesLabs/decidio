@@ -7,10 +7,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 
 #include "cJSON.h"
 #include "driver/gpio.h"
+#include "esp_rom_crc.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "rt.h"
@@ -191,7 +194,7 @@ static void summary(int minute, int day)
         s->events = s->on_s = 0;
     }
     if (any) {
-        rt_alert_event("daily", text, true, 1, false);
+        rt_alert_event("daily", text, true, 1, false, true);   // once a day: never held back
     }
 }
 
@@ -220,7 +223,7 @@ void rt_actions_update(const rt_result_t *r, int64_t now)
         printf("{\"event\":\"%s\",\"state\":\"%s\",\"p\":%.3f,\"ms\":%lld}\n", a->name, o.on ? "on" : "off", s_st[i].p,
                (long long)(now / 1000));
         if (o.notify) {
-            rt_alert_event(a->name, a->text, o.on, s_st[i].p, a->photo);
+            rt_alert_event(a->name, a->text, o.on, s_st[i].p, a->photo, a->urgent);
         }
         if (a->dev >= 0) {
             rt_dev_rule(a->dev, i, a->dev_do, o.on);
@@ -251,6 +254,54 @@ int rt_actions_brief(char *dst, size_t cap)
     }
     ADD("]");
     return n < (int)cap ? n : -1;
+}
+
+static uint32_t rules_crc(void)                          // with the lock held
+{
+    return esp_rom_crc32_le(0, (const uint8_t *)s_act, sizeof(rt_action_t) * s_n) ^ (uint32_t)s_n;
+}
+
+// low power (power.c): the rules' states go into memory that deep sleep keeps, and come back at the next wake
+void rt_actions_save(rt_actions_keep_t *k)
+{
+    if (!s_lock) {
+        return;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    k->crc = rules_crc();
+    k->n = s_n;
+    k->summary_day = s_summary_day;
+    memcpy(k->st, s_st, sizeof(rt_rule_state_t) * s_n);
+    xSemaphoreGive(s_lock);
+}
+
+// The times in the states count from the start of the run that saved them. offset_us gives the wall clock of that
+// run (the wall clock keeps counting in deep sleep), so each time moves to the same moment of this run.
+bool rt_actions_restore(const rt_actions_keep_t *k)
+{
+    if (!s_lock) {
+        return false;
+    }
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    const int64_t shift = esp_timer_get_time() - ((int64_t)tv.tv_sec * 1000000 + tv.tv_usec) - k->offset_us;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    const bool ok = k->n == s_n && k->crc == rules_crc();
+    if (ok) {
+        memcpy(s_st, k->st, sizeof(rt_rule_state_t) * s_n);
+        for (int i = 0; i < s_n; i++) {
+            int64_t *t[] = { &s_st[i].since_us, &s_st[i].until_us, &s_st[i].on_since_us, &s_st[i].last_note_us };
+            for (size_t j = 0; j < sizeof(t) / sizeof(t[0]); j++) {
+                if (*t[j]) {
+                    *t[j] += shift;
+                    *t[j] = *t[j] ? *t[j] : -1;           // 0 means "not set"
+                }
+            }
+        }
+        s_summary_day = k->summary_day;
+    }
+    xSemaphoreGive(s_lock);
+    return ok;
 }
 
 bool rt_actions_uses_dev(int slot)

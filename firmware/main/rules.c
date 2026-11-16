@@ -9,7 +9,7 @@
 //    "on":"end",               which change sends an alert: start (default) | end | both
 //    "hours":[420,1320],       only between these minutes of the day (may wrap past midnight); needs the clock
 //    "gpio":-1,"level":1,      a pin driven while the rule is on
-//    "text":"The washer finished","notify":true,"photo":false,"cooldown_s":600,"count":true}
+//    "text":"The washer finished","notify":true,"photo":false,"cooldown_s":600,"count":true,"urgent":false}
 // {"q":"radio_motion","op":">=","p":0.05} tests the radio movement score instead of a model answer.
 // {"q":"in:chip_temp","op":">=","p":45} tests a named input (inputs.c): a sensor's number, the fly eye, ...; the
 //   condition is false while the input has no value.
@@ -206,6 +206,7 @@ bool rt_rule_parse(const cJSON *a, const rt_model_t *m, rt_action_t *A)
     A->notify = jint(a, "notify", 1) != 0;
     A->photo = jint(a, "photo", 0) != 0;
     A->count = jint(a, "count", 0) != 0;
+    A->urgent = jint(a, "urgent", 0) != 0;
     const cJSON *on = cJSON_GetObjectItemCaseSensitive(a, "on");
     A->edge = !cJSON_IsString(on) ? RT_EDGE_START : !strcmp(on->valuestring, "end") ? RT_EDGE_END
               : !strcmp(on->valuestring, "both") ? RT_EDGE_BOTH : RT_EDGE_START;
@@ -271,8 +272,9 @@ int rt_rules_json(const rt_model_t *m, const rt_action_t *act, int n_act, char *
             ADD(",\"op\":\"%s\",\"p\":%.*f}", c->below ? "<" : ">=", c->p > 10 || c->p < -10 ? 1 : 3, c->p);
         }
         ADD("],\"for_ms\":%d,\"hold_ms\":%d,\"on\":\"%s\",\"gpio\":%d,\"level\":%d,\"text\":\"%s\",\"notify\":%s,"
-            "\"photo\":%s,\"cooldown_s\":%d,\"count\":%s", a->for_ms, a->hold_ms, EDGE[a->edge], a->gpio, a->level, a->text,
-            a->notify ? "true" : "false", a->photo ? "true" : "false", a->cooldown_s, a->count ? "true" : "false");
+            "\"photo\":%s,\"cooldown_s\":%d,\"count\":%s,\"urgent\":%s", a->for_ms, a->hold_ms, EDGE[a->edge], a->gpio, a->level,
+            a->text, a->notify ? "true" : "false", a->photo ? "true" : "false", a->cooldown_s, a->count ? "true" : "false",
+            a->urgent ? "true" : "false");
         if (a->from_min >= 0) {
             ADD(",\"hours\":[%d,%d]", a->from_min, a->to_min);
         }

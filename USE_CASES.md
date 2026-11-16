@@ -14,6 +14,11 @@ How to read the **Uses** column:
 | **eye** | The idea uses the fly eye, which finds the objects that move in the camera picture (ideas 106 to 111) |
 | **radio** | The idea uses the Wi-Fi signal in place of the model. Three movement builds exist (ideas 81 and 90). The other radio rows are only ideas |
 
+**On a battery.** Ideas that check a state that stays for some minutes also operate with low power (README.md,
+"Low power (battery)"). Examples are a car in the driveway (5), mail in the mailbox (32), the garage door (33) and a
+parking space. In low power the board looks only at points in time. Thus do not use low power for ideas that must
+see a short event, for example a person who walks past, a sound, or the eye ideas (106 to 111).
+
 A name with "(teach)" after it is not a build. The file `recipes/teach.yaml` tells you what to record for that idea.
 
 GUIDE.md gives the measured accuracy of each base answer. Each row is a start point, not a finished product. Do a
@@ -235,7 +240,7 @@ actions:
 | `on` | The change that sends the alert: `start` (default), `end` or `both` |
 | `hours` | The rule operates only in these hours, for example `"22:00-07:00"`. The board must have Wi-Fi for the clock. The rule stays off until the clock is set |
 | `gpio`, `level` | The pin that the rule sets while it is on (`-1`: no pin). `level: 1` sets the pin high while the rule is on |
-| `notify` | `false`, or `{text, photo, cooldown_s}`: the text of the alert, a camera picture with the alert (Telegram only), and the shortest time between two alerts |
+| `notify` | `false`, or `{text, photo, cooldown_s, urgent}`: the text of the alert, a camera picture with the alert (Telegram only), the shortest time between two alerts, and `urgent: true` to send the alert immediately always (the board does not keep it to send with other alerts) |
 | `count: daily` | Counts how many times and how long the rule was on. The board sends the result as one message each day |
 
 You can set two more things for a rule only on the page of the board, because they use names from one home:

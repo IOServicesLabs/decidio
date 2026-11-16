@@ -2,7 +2,40 @@
 
 ## Unreleased
 
-No changes.
+### Added
+
+- Devices tab: a new card **Devices heard on the network**. It shows a name for each Smart Life device that the board
+  hears. The board asks the router (DNS), then the DNS server from DHCP, then mDNS.
+- Devices tab: **Try** switches a heard device before you save it. Type the local key and click **Blink**, **On**,
+  **Off** or **Read**. **Blink** sets the other state for 2 seconds, then the first state again. **Use** writes the
+  data in **Add a device**.
+- Firmware: the route `POST /api/devices/try`.
+- Groups: one board sends the alerts of all the boards in the group. The other boards give it their alerts in signed
+  messages. If it does not answer in 3 seconds, the board sends the alert itself.
+- Alerts: after an alert, the board keeps the alerts of the next 60 seconds and sends them together as one message.
+  The setting `alert_window` changes the time (`0`: send each alert immediately).
+- Rules: the field `urgent`. The alert of an urgent rule always goes immediately.
+- Alerts tab: **Use these alert settings on all boards in the group** (`POST /api/alerts/share`).
+- Low power for a board on a battery (`power.c`). It is off until you switch it on. The board sleeps, wakes on a
+  timer (1 to 1440 times each day) and optionally on a motion sensor pin, looks for some seconds, and connects to
+  Wi-Fi only to send and at check-ins. The rules keep their states through the sleep.
+- Page: the tab **Power**. It has a plan with an estimate of the days on one charge, the list of what changes when
+  low power is on, the switch, and the measured counts.
+- Firmware: the routes `GET /api/power` and `POST /api/power`, and the console commands `power`, `power on|off`,
+  `power stay|go` and `power wakes <n>`.
+- The sensor file `sensors/battery.c`: the battery voltage through two resistors, as the inputs `battery_v` and
+  `battery_pct`. The Power tab can add a low-battery alert.
+
+### Changed
+
+- `/api/devices`: each heard device has the fields `name` and `named`.
+- Alerts: the text shows the room of the board (or its name if it has no room). The webhook JSON has the field
+  `room`. `device` and the MQTT topic name the board that saw the event.
+- The alert text of a rule on an input shows the value of the input, not a percentage (before: 62 °C showed as
+  "6200%").
+- `/api/info` alerts: the fields `window`, `grouped` and `handed`. `/api/home`: the field `sender`, and `alerts` for
+  each board.
+- The prebuilt firmware in `decidio/firmware_bins/esp32s3/` was built again with these changes (ESP-IDF 5.5).
 
 ## 0.4.0
 

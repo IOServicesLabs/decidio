@@ -38,6 +38,7 @@ static volatile uint32_t s_count;
 static SemaphoreHandle_t s_lock;
 static uint16_t s_pid;
 static bool s_probed;
+static volatile bool s_stop, s_stopped;    // rt_cam_standby: the camera task takes no more frames
 static int16_t s_map[RT_CAM][2];     // per output coordinate: source index (fixed 8.8) for bilinear
 
 static int board_orient(void)
@@ -254,6 +255,11 @@ static void cam_task(void *arg)
 {
     TickType_t last = xTaskGetTickCount();
     for (;;) {
+        if (s_stop) {
+            s_stopped = true;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
         if (s_zoom.want) {
             zoom_once();                          // the model and the eye get no frame meanwhile (about 0.6 seconds)
             last = xTaskGetTickCount();
@@ -342,6 +348,28 @@ bool rt_cam_acquire(const uint8_t **cur, const uint8_t **prev, uint32_t *seq)
 void rt_cam_release(void)
 {
     xSemaphoreGive(s_lock);
+}
+
+// Before deep sleep. The XIAO and S3-CAM pin maps have no power-down pin, so the sensor stays powered in deep sleep;
+// its standby mode cuts most of its current (OV2640: COM2 bit 4 in the sensor bank; OV3660 / OV5640: 0x3008 bit 6).
+void rt_cam_standby(void)
+{
+    if (!s_probed) {
+        return;
+    }
+    s_stop = true;
+    for (int i = 0; i < 30 && s_lock && !s_stopped; i++) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    sensor_t *s = esp_camera_sensor_get();
+    if (!s || !s->set_reg) {
+        return;
+    }
+    if (s_pid == OV2640_PID) {
+        s->set_reg(s, 0x100 | 0x09, 0x10, 0x10);
+    } else if (s_pid == OV3660_PID || s_pid == OV5640_PID) {
+        s->set_reg(s, 0x3008, 0x40, 0x40);
+    }
 }
 
 int rt_cam_colors(void)

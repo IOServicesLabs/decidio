@@ -1,6 +1,7 @@
 // decidio runtime
 //   core 0: camera task (frame ring), mic task (streaming log-mel), console
 //   core 1: decision loop - runs as soon as new input lands (every audio hop, or every camera frame if image-only)
+//   low power (power.c, off by default): the board sleeps between short looks and joins Wi-Fi only to send
 #include <stdio.h>
 #include <string.h>
 
@@ -177,6 +178,7 @@ void app_main(void)
         nvs_flash_init();
     }
     rt_store_init();
+    rt_power_early();             // low power: a wake that only arms the motion pin again sleeps here at once
     rt_board_detect();            // which board, camera, microphone: before the model is read
     rt_console_board();
     rt_sensors_start();           // named inputs exist before any rule is read
@@ -224,11 +226,14 @@ void app_main(void)
         s_model_ok = rt_decide_init() == ESP_OK;
     }
     rt_actions_init();
-    if (s_cam_ok) {
-        rt_eye_start();
+    if (s_cam_ok && !rt_power_on()) {
+        rt_eye_start();           // the fly eye watches all the time: not in low power
     }
     rt_print_info();
     rt_console_ready();
+    rt_power_start();         // low power: the rules' states from the last wake; decisions wait for the camera's light
     xTaskCreatePinnedToCore(decide_task, "decide", 8192, NULL, 3, NULL, 1);
-    rt_wifi_boot();           // after the model has its memory: join the network or open the setup access point
+    if (rt_power_net_now()) {
+        rt_wifi_boot();       // after the model has its memory: join the network or open the setup access point
+    }
 }

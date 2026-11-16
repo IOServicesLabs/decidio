@@ -145,6 +145,9 @@ specific to one home.
 | Alerts that leave the board | A maximum of 20 each minute |
 | Tries for each alert | 3 |
 | Shortest time between two alerts of one rule | `cooldown_s`, set for each rule |
+| Alerts kept and sent together as one message | The alerts in the `alert_window` seconds (default 60, `0`: none) after an alert |
+| Alerts that always go immediately | The alerts of a rule with `urgent: true`, and the daily summary |
+| Alerts in a group | One board sends them: the board with alert settings that has the first name in alphabetical order |
 | Rules with `count: daily` | Send one summary each day instead of each alert |
 
 **What leaves the board.** By default, only the alert text leaves the board, and it goes only to the destinations
@@ -665,6 +668,7 @@ microphone. That model has no sound branch to pay for: approximately 10.8 decisi
 | `radio_motion` | The movement score from the Wi-Fi signal |
 | `eye_moving`, `eye_figures`, `eye_approach`, `eye_new`, `eye_changed`, `eye_self_motion` | The six numbers of the fly eye |
 | `chip_temp` | The temperature of the chip |
+| `battery_v`, `battery_pct` | The battery voltage through two resistors (`sensors/battery.c`, refer to "Low power" below) |
 | `pin<N>` | Input pins |
 | Other names | Each file in `firmware/main/sensors/` that registers an input (`rt_input_register`) |
 
@@ -778,6 +782,10 @@ Console commands (one command on each line):
 | `pin in <gpio> [up\|down\|none]` | Uses a pin as an input. The change applies at the next start |
 | `i2c scan <sda pin> <scl pin>` | Lists the addresses of the I2C parts on these two pins |
 | `mic probe <clk pin> <data pin>` | Looks for a PDM microphone on these two pins (only while the microphone does not run) |
+| `power` | Shows the low-power settings, what the board does now and the counts |
+| `power on\|off` | Sets low power on or off |
+| `power stay\|go` | Keeps the board awake until `power go` or a restart |
+| `power wakes <n>` | Sets the timer wakes each day (1 to 1440) |
 
 The output lines are JSON:
 
@@ -825,6 +833,73 @@ labels `empty`, `sitting` and `walking` are the training data for such an input.
 Radio patterns are specific to one room and one layout. Thus anything finer than movement will be a question that you teach in place, not a part of a
 base model. While the board is joined to a network, it stays on the channel of that network. The board refuses
 `radio <channel>` for a different channel.
+
+### Low power
+
+Low power (`power.c`) is off until the user sets it. README.md, section "Low power (battery)", tells the user what
+changes. With low power on, the board is in deep sleep between short looks:
+
+| Wake | What the board does | Wi-Fi |
+|---|---|---|
+| Power-on or reset | Operates as without low power for 5 minutes, then sleeps | Yes |
+| Timer (wakes each day) | Looks, does what the rules say, sleeps | Only to send |
+| Motion pin (optional) | The same. A maximum of one wake in each `gap` seconds | Only to send |
+| Check-in (each `checkin` hours) | Looks, joins the group, sets the clock, stays awake 30 s after Wi-Fi connects | Yes |
+| Timer, only to arm the motion pin again | Sleeps again before the model loads | No |
+
+A wake is a full start of the firmware. The decisions wait 1 s, because the camera adjusts its light after a cold
+start. Then the model and the rules operate for the look time (at minimum one sound clip for a model with sound).
+The board sleeps when the look time is over, no alert waits to go out, and no device command waits. The longest wait
+for these is 25 s.
+
+The board does not sleep while a computer is connected to the USB socket (`usb_serial_jtag_is_connected`), for 60 s
+after a person opens the page or sends a change (not after a request from a board of the group), and after `power
+stay`. `lp_usb` (the Power tab, **Sleep also while a computer is connected to USB**) lets it sleep with a computer
+connected, for tests.
+
+What the board keeps through deep sleep (`RTC_NOINIT_ATTR`):
+
+- The states of the rules (`rt_actions_save`, `rt_actions_restore`). The times move by the time asleep, thus
+  cooldowns, `for_ms`, `hold_ms`, start and end alerts and the daily counts continue across wakes. The board uses the
+  states again only if the rules did not change.
+- The counts for the estimate: wakes, time awake, time with Wi-Fi, time asleep, check-ins.
+- The router and the channel of the last connection. The next connection goes directly to that router.
+- The board that sent the alerts of the group at the last wake. The next wake gives its alert to that board without
+  a wait for the broadcasts.
+
+Changes in the other parts of the firmware while low power is on:
+
+| Part | Change |
+|---|---|
+| `alert.c` | An alert starts Wi-Fi and waits for it (20 s maximum). The alert window does not apply. An alert with a photo is not given to the sender |
+| `home.c` | The broadcast says `"al":0`. Thus the other boards never select this board to send the alerts of the group |
+| `devices.c` | Device commands wait until Wi-Fi connects. A waiting command starts Wi-Fi |
+| `radio.c`, `eye.cc` | Off |
+| `camera.c` | Before deep sleep, the sensor goes into standby (OV2640: COM2 bit 4; OV3660 and OV5640: register 0x3008 bit 6). The boards have no power-down pin, thus the sensor stays powered |
+
+Settings in the settings store (`POST /api/power` takes the names in brackets):
+
+| Key | Function | Range | At the start |
+|---|---|---|---|
+| `lp_on` (`on`) | Low power | true or false | false |
+| `lp_wakes` (`wakes`) | Timer wakes each day | 1 to 1440 | 96 |
+| `lp_from`, `lp_to` (`from`, `to`) | Wake only between these minutes of the day (-1: always) | -1 to 1439 | -1 |
+| `lp_look` (`look`) | Look time (s) | 1 to 30 | 3 |
+| `lp_checkin` (`checkin`) | Hours between check-ins | 1 to 48 | 12 |
+| `lp_pir` (`pir`) | Motion sensor pin, high on movement (-1: none) | free pin 1 to 21 | -1 |
+| `lp_gap` (`gap`) | Shortest time between two motion wakes (s) | 5 to 3600 | 30 |
+| `lp_usb` (`usb_sleep`) | Sleep also while a computer is connected | true or false | false |
+| `lp_mah`, `lp_isleep`, `lp_iawake`, `lp_iwifi` | Battery (mAh) and currents (mA) for the estimate | - | 2000, 1, 110, 90 |
+| `bat_pin`, `bat_ratio` | Battery voltage pin and divider ratio (next start) | free pin 1 to 10, 1 to 10 | -1, 2 |
+
+`POST /api/power` also takes `{"stay":true|false}` and `{"reset_counts":true}`. `GET /api/power` gives the settings,
+`now` (mode, USB, stay, Wi-Fi, time awake), `count`, `next_look`, `next_checkin` and `battery`.
+
+The page calculates the estimate. A look costs 2.5 s and the look time, at the awake current. On a XIAO, a look with a look time of 3 s
+was awake for 5.5 s (measured). An alert costs approximately 6 s, and a check-in approximately 45 s, at the awake current plus
+the Wi-Fi current. The page uses 80 % of the battery. The currents at the start (1 mA asleep, 110 mA awake, 90 mA more
+with Wi-Fi) are estimates and were not measured. The measured estimate uses the counts of the board with the same
+currents.
 
 ### Rebuild the firmware
 

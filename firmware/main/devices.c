@@ -24,6 +24,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "esp_netif.h"
 #include "lwip/sockets.h"
 #include "mbedtls/aes.h"
 #include "mbedtls/base64.h"
@@ -50,8 +51,9 @@ typedef struct {
 
 typedef struct {
     char id[24], ip[16], product[20];
-    uint8_t ver;
-    int64_t seen_us;
+    char name[48];              // the name of its address: from the router's DNS or from mDNS; "" when none
+    uint8_t ver, tries;         // tries: name lookups done
+    int64_t seen_us, looked_us;
 } found_t;
 
 typedef struct {
@@ -677,8 +679,8 @@ int rt_dev_json(char *dst, size_t cap)
         for (int i = 0; i < MAX_FOUND; i++) {
             const found_t *f = &s_found[i];
             if (f->id[0] && now - f->seen_us < 120 * 1000000LL) {
-                ADD("%s{\"id\":\"%s\",\"ip\":\"%s\",\"ver\":\"%d.%d\",\"product\":\"%s\"}", any ? "," : "", f->id, f->ip, f->ver / 10, f->ver % 10,
-                    f->product);
+                ADD("%s{\"id\":\"%s\",\"ip\":\"%s\",\"ver\":\"%d.%d\",\"product\":\"%s\",\"name\":\"%s\",\"named\":%s}", any ? "," : "", f->id, f->ip,
+                    f->ver / 10, f->ver % 10, f->product, f->name, f->name[0] || f->tries >= 3 ? "true" : "false");
                 any = true;
             }
         }
@@ -740,6 +742,105 @@ bool rt_dev_test(int slot, const char *what, rt_alert_result_t *out, char *dps, 
     out->ok = run(slot, status ? CMD_STATUS : CMD_SET, !strcmp(what, "on"), dps, dps_cap, out->detail, sizeof(out->detail));
     out->ms = (int)((esp_timer_get_time() - t0) / 1000);
     return out->ok;
+}
+
+// the state of one on/off data point in a device's answer: 1, 0, or -1 when it is not there or not true/false
+static int dp_state(const char *dps, int dp)
+{
+    cJSON *j = cJSON_Parse(dps);
+    const cJSON *d = cJSON_GetObjectItemCaseSensitive(j, "dps");
+    if (!d) {
+        d = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(j, "data"), "dps");
+    }
+    char k[8];
+    snprintf(k, sizeof(k), "%d", dp);
+    const cJSON *v = cJSON_GetObjectItemCaseSensitive(d, k);
+    const int r = cJSON_IsBool(v) ? cJSON_IsTrue(v) : -1;
+    cJSON_Delete(j);
+    return r;
+}
+
+// from the web page, before a device is saved: switch it with the key that the person typed, to find which device
+// an id is. {"id","ip","ver":"3.5","key","dp":1,"do":"on|off|status|blink"}. blink: the opposite state for 2 seconds,
+// then the state it had. Nothing is saved.
+bool rt_dev_try(const cJSON *j, rt_alert_result_t *out, char *dps, size_t dps_cap)
+{
+    memset(out, 0, sizeof(*out));
+    if (dps_cap) {
+        dps[0] = 0;
+    }
+    char *why = out->detail;
+    const size_t cap = sizeof(out->detail);
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(j, "id"), *key = cJSON_GetObjectItemCaseSensitive(j, "key");
+    const cJSON *ip = cJSON_GetObjectItemCaseSensitive(j, "ip"), *ver = cJSON_GetObjectItemCaseSensitive(j, "ver");
+    const cJSON *dp = cJSON_GetObjectItemCaseSensitive(j, "dp"), *what = cJSON_GetObjectItemCaseSensitive(j, "do");
+    const char *w = cJSON_IsString(what) ? what->valuestring : "";
+    const bool blink = !strcmp(w, "blink"), status = !strcmp(w, "status");
+    const int v = cJSON_IsString(ver) ? (int)(atof(ver->valuestring) * 10 + 0.5) : cJSON_IsNumber(ver) ? ver->valueint : 33;
+    tdev_t d = { .used = true, .state = -1 };
+    if (!s_dev) {
+        snprintf(why, cap, "the device list is not available");
+        return false;
+    } else if (!blink && !status && strcmp(w, "on") && strcmp(w, "off")) {
+        snprintf(why, cap, "do: on | off | status | blink");
+        return false;
+    } else if (!cJSON_IsString(id) || !plain(id->valuestring, 23) || strlen(id->valuestring) < 8) {
+        snprintf(why, cap, "id: the device id (20 or 22 characters)");
+        return false;
+    } else if (!cJSON_IsString(key) || strlen(key->valuestring) != 16 || !plain(key->valuestring, 16)) {
+        snprintf(why, cap, "key: the local key is 16 characters");
+        return false;
+    } else if (v != 31 && v != 33 && v != 34 && v != 35) {
+        snprintf(why, cap, "ver: 3.1, 3.3, 3.4 or 3.5");
+        return false;
+    }
+    snprintf(d.id, sizeof(d.id), "%s", id->valuestring);
+    snprintf(d.key, sizeof(d.key), "%s", key->valuestring);
+    snprintf(d.ip, sizeof(d.ip), "%s", cJSON_IsString(ip) ? ip->valuestring : "");
+    d.ver = (uint8_t)v;
+    d.dp = cJSON_IsNumber(dp) && dp->valueint > 0 && dp->valueint < 256 ? (uint8_t)dp->valueint : 1;
+    if (!d.ip[0]) {                                        // the address it was heard from
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+        for (int i = 0; i < MAX_FOUND; i++) {
+            if (!strcmp(s_found[i].id, d.id)) {
+                snprintf(d.ip, sizeof(d.ip), "%s", s_found[i].ip);
+            }
+        }
+        xSemaphoreGive(s_lock);
+    }
+    if (!d.ip[0] || strlen(d.ip) > 15 || strspn(d.ip, "0123456789.") != strlen(d.ip)) {
+        snprintf(why, cap, "ip: the address of the device is not known");
+        return false;
+    }
+    if (!rt_wifi_online()) {
+        snprintf(why, cap, "the board is not on Wi-Fi");
+        return false;
+    }
+    const int64_t t0 = esp_timer_get_time();
+    xSemaphoreTake(s_io, portMAX_DELAY);
+    bool ok;
+    if (blink) {
+        ok = exchange(&d, CMD_STATUS, false, dps, dps_cap, why, cap);
+        const int was = ok ? dp_state(dps, d.dp) : -1;
+        if (ok && was < 0) {
+            snprintf(why, cap, "data point %d is not an on/off switch: select the one that is true or false", d.dp);
+            ok = false;
+        } else if (ok && (ok = exchange(&d, CMD_SET, !was, NULL, 0, why, cap))) {
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            ok = exchange(&d, CMD_SET, was, NULL, 0, why, cap);
+            if (!ok) {
+                char e[72];
+                snprintf(e, sizeof(e), "%s", why);
+                snprintf(why, cap, "it switched, but did not switch back: %s", e);
+            }
+        }
+    } else {
+        ok = exchange(&d, status ? CMD_STATUS : CMD_SET, !strcmp(w, "on"), status ? dps : NULL, dps_cap, why, cap);
+    }
+    xSemaphoreGive(s_io);
+    out->ok = ok;
+    out->ms = (int)((esp_timer_get_time() - t0) / 1000);
+    return ok;
 }
 
 // ---- rules ----
@@ -814,6 +915,9 @@ static void heard(const char *js)
             }
         }
         found_t *f = &s_found[at < 0 ? oldest : at];
+        if (at < 0 || strcmp(f->ip, ip->valuestring)) {   // a new device, or a new address: find its name again
+            memset(f, 0, sizeof(*f));
+        }
         snprintf(f->id, sizeof(f->id), "%s", id->valuestring);
         snprintf(f->ip, sizeof(f->ip), "%s", ip->valuestring);
         snprintf(f->product, sizeof(f->product), "%s", cJSON_IsString(pk) && plain(pk->valuestring, 19) ? pk->valuestring : "");
@@ -891,11 +995,198 @@ static void listen_udp(void)
     }
 }
 
+// ---- a name for each device heard: so a person can tell which device an id is ----
+// First the router, then the DNS server of the Wi-Fi (most routers answer with the name the device gave when it asked
+// for its address, for example "ESP_353DA3" or "kitchen-plug"), then mDNS (a one-shot query; devices that announce
+// themselves answer). One lookup
+// at a time, at most 3 tries for each device, from the home task.
+
+static int ptr_query(uint8_t *q, const char *ip, uint16_t id, bool mdns)
+{
+    static const uint8_t TAIL[] = { 7, 'i', 'n', '-', 'a', 'd', 'd', 'r', 4, 'a', 'r', 'p', 'a', 0 };
+    unsigned a[4];
+    if (sscanf(ip, "%u.%u.%u.%u", &a[0], &a[1], &a[2], &a[3]) != 4) {
+        return -1;
+    }
+    memset(q, 0, 12);
+    q[0] = (uint8_t)(id >> 8);
+    q[1] = (uint8_t)id;
+    q[2] = mdns ? 0 : 1;                                   // the router may ask further; mDNS does not
+    q[5] = 1;                                              // one question
+    int n = 12;
+    for (int i = 3; i >= 0; i--) {                         // 4.3.2.1.in-addr.arpa
+        if (a[i] > 255) {
+            return -1;
+        }
+        const int l = snprintf((char *)q + n + 1, 4, "%u", a[i]);
+        q[n] = (uint8_t)l;
+        n += 1 + l;
+    }
+    memcpy(q + n, TAIL, sizeof(TAIL));
+    n += sizeof(TAIL);
+    q[n++] = 0;
+    q[n++] = 12;                                           // PTR
+    q[n++] = mdns ? 0x80 : 0;                              // mDNS: answer to this port, not to the group
+    q[n++] = 1;                                            // IN
+    return n;
+}
+
+static int skip_name(const uint8_t *m, int len, int at)
+{
+    while (at >= 0 && at < len) {
+        const uint8_t l = m[at];
+        if (l == 0) {
+            return at + 1;
+        }
+        if ((l & 0xc0) == 0xc0) {
+            return at + 2;
+        }
+        at += 1 + l;
+    }
+    return -1;
+}
+
+static bool read_name(const uint8_t *m, int len, int at, char *out, size_t cap)
+{
+    size_t o = 0;
+    for (int jumps = 0; at >= 0 && at < len;) {
+        const uint8_t l = m[at];
+        if (l == 0) {
+            out[o ? o - 1 : 0] = 0;                        // without the last dot
+            return o > 0;
+        }
+        if ((l & 0xc0) == 0xc0) {
+            if (at + 1 >= len || ++jumps > 8) {
+                return false;
+            }
+            at = ((l & 0x3f) << 8) | m[at + 1];
+            continue;
+        }
+        if (l > 63 || at + 1 + l > len || o + l + 2 > cap) {
+            return false;
+        }
+        for (int i = 0; i < l; i++) {
+            const char c = (char)m[at + 1 + i];
+            out[o++] = (c < 33 || c > 126 || c == '"' || c == '\\') ? '_' : c;   // safe inside a JSON string
+        }
+        out[o++] = '.';
+        at += 1 + l;
+    }
+    return false;
+}
+
+static bool ptr_answer(const uint8_t *m, int len, uint16_t id, bool mdns, char *out, size_t cap)
+{
+    if (len < 12 || !(m[2] & 0x80) || (m[3] & 0x0f) || (!mdns && (m[0] != (uint8_t)(id >> 8) || m[1] != (uint8_t)id))) {
+        return false;
+    }
+    const int qd = m[4] << 8 | m[5], an = m[6] << 8 | m[7];
+    int at = 12;
+    for (int i = 0; i < qd && at >= 0; i++) {
+        at = skip_name(m, len, at);
+        at = at < 0 ? -1 : at + 4;
+    }
+    for (int i = 0; i < an && at >= 0; i++) {
+        at = skip_name(m, len, at);
+        if (at < 0 || at + 10 > len) {
+            return false;
+        }
+        const int type = m[at] << 8 | m[at + 1], rdlen = m[at + 8] << 8 | m[at + 9];
+        at += 10;
+        if (at + rdlen > len) {
+            return false;
+        }
+        if (type == 12 && read_name(m, len, at, out, cap)) {
+            return true;
+        }
+        at += rdlen;
+    }
+    return false;
+}
+
+static bool ask_name(uint32_t server, uint16_t port, const char *ip, bool mdns, char *out, size_t cap)
+{
+    uint8_t *m = heap_caps_malloc_prefer(512, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
+    const int fd = m ? socket(AF_INET, SOCK_DGRAM, 0) : -1;
+    bool got = false;
+    if (fd >= 0) {
+        const struct timeval tv = { .tv_sec = 0, .tv_usec = 600000 };
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        const uint16_t id = (uint16_t)esp_random();
+        const int n = ptr_query(m, ip, id, mdns);
+        const struct sockaddr_in to = { .sin_family = AF_INET, .sin_port = htons(port), .sin_addr.s_addr = server };
+        if (n > 0 && sendto(fd, m, n, 0, (const struct sockaddr *)&to, sizeof(to)) == n) {
+            for (int k = 0; k < 4 && !got; k++) {          // other answers can arrive first
+                const int r = recv(fd, m, 512, 0);
+                if (r <= 0) {
+                    break;
+                }
+                got = ptr_answer(m, r, id, mdns, out, cap);
+            }
+        }
+        close(fd);
+    }
+    free(m);
+    return got;
+}
+
+static void name_one(void)
+{
+    char ip[16] = "", id[24] = "", name[48] = "";
+    const int64_t now = esp_timer_get_time();
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    for (int i = 0; i < MAX_FOUND && !ip[0]; i++) {
+        found_t *f = &s_found[i];
+        if (f->id[0] && !f->name[0] && f->tries < 3 && (f->tries == 0 || now - f->looked_us > 60 * 1000000LL)) {
+            f->tries++;
+            f->looked_us = now;
+            snprintf(ip, sizeof(ip), "%s", f->ip);
+            snprintf(id, sizeof(id), "%s", f->id);
+        }
+    }
+    xSemaphoreGive(s_lock);
+    if (!ip[0]) {
+        return;
+    }
+    // the router first: it gave the device its address and knows the name the device asked with. The DNS server from
+    // DHCP can be a public one (for example 9.9.9.9) that knows no local names.
+    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t me = { 0 };
+    esp_netif_dns_info_t dns = { 0 };
+    uint32_t gw = 0;
+    bool got = false;
+    if (sta && esp_netif_get_ip_info(sta, &me) == ESP_OK && me.gw.addr) {
+        gw = me.gw.addr;
+        got = ask_name(gw, 53, ip, false, name, sizeof(name));
+    }
+    if (!got && sta && esp_netif_get_dns_info(sta, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK && dns.ip.type == ESP_IPADDR_TYPE_V4 &&
+        dns.ip.u_addr.ip4.addr && dns.ip.u_addr.ip4.addr != gw) {
+        got = ask_name(dns.ip.u_addr.ip4.addr, 53, ip, false, name, sizeof(name));
+    }
+    if (!got) {
+        got = ask_name(htonl(0xE00000FB), 5353, ip, true, name, sizeof(name));   // 224.0.0.251
+    }
+    if (got && !strcmp(name, ip)) {
+        got = false;                                       // some routers answer with the address itself
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    for (int i = 0; got && i < MAX_FOUND; i++) {
+        if (!strcmp(s_found[i].id, id) && !strcmp(s_found[i].ip, ip)) {
+            snprintf(s_found[i].name, sizeof(s_found[i].name), "%s", name);
+        }
+    }
+    xSemaphoreGive(s_lock);
+}
+
 // from the home task: send what the rules asked for, and listen for devices
 void rt_dev_step(int wait_ms)
 {
     if (!s_dev) {
         vTaskDelay(pdMS_TO_TICKS(wait_ms));
+        return;
+    }
+    if (rt_power_on() && !rt_wifi_online()) {
+        vTaskDelay(pdMS_TO_TICKS(wait_ms));               // low power: the commands wait until Wi-Fi has joined
         return;
     }
     job_t j;
@@ -911,12 +1202,20 @@ void rt_dev_step(int wait_ms)
         }
     }
     listen_udp();
+    if (rt_wifi_online()) {
+        name_one();
+    }
+}
+
+bool rt_dev_pending(void)
+{
+    return s_q && uxQueueMessagesWaiting(s_q) > 0;
 }
 
 void rt_dev_wake(void)                                     // the home task has other work: stop waiting for a job
 {
     const job_t none = { .slot = 0xff };
-    if (s_q) {
+    if (s_q && !(rt_power_on() && !rt_wifi_online())) {   // low power: rt_dev_pending must see only real commands
         xQueueSend(s_q, &none, 0);
     }
 }

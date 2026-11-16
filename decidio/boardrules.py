@@ -11,7 +11,7 @@ In yaml (under `actions:` in decidio.yaml, or `rules:` in a recipe):
       on: end                             # which change sends an alert: start (default) | end | both
       hours: "07:00-22:00"                # only in these hours (may wrap past midnight); needs Wi-Fi for the clock
       gpio: -1                            # a pin driven while the rule is on (-1: none); level: 1 = high when on
-      notify: {text: "The washer finished", photo: false, cooldown_s: 600}     # or false: never alert
+      notify: {text: "The washer finished", photo: false, cooldown_s: 600, urgent: false}   # or false: never alert
       count: daily                        # count events and minutes on, sent as one message a day
 
 A condition is `question = option`, `question != option` (the option's probability is below 1 - above), either with
@@ -109,6 +109,7 @@ def wire(rule: dict, questions: list[dict]) -> dict:
         "photo": bool(n.get("photo", rule.get("photo", False))),
         "cooldown_s": int(n.get("cooldown_s", rule.get("cooldown_s", 60))),
         "count": bool(rule.get("count", False)),
+        "urgent": bool(n.get("urgent", rule.get("urgent", False))),
     }
     if out["for_ms"] < 0 or out["hold_ms"] < 0 or out["cooldown_s"] < 0:
         raise RuleError(f"{name}: each time must be 0 or more")

@@ -268,6 +268,7 @@ form, then click **Save page password**.
 | Devices | Adds Smart Life devices and does a test of each device. Makes a rule that switches a light |
 | Boards | Sets the room name and the group. Shows the other boards and their rules |
 | Alerts | Sets the Telegram bot, the webhook and the MQTT broker. Each destination has a **Send test** button |
+| Power | Sets low power for a board on a battery, and shows the estimate of the battery life. Refer to "Low power (battery)" |
 | Radio | Shows the movement score from the signal of your router |
 | Wi-Fi | Changes the network. Sets the password of the page |
 | System | Sets the time of the daily summary. Loads a new model or new firmware. Shows the sensors that the board found. Sets input pins and scans for I2C parts. Starts the board again. Erases the settings |
@@ -350,6 +351,33 @@ You must have the **local key** of each device. Only your Smart Life account can
 7. Answer the questions of the wizard. The wizard shows each device with its ID and its local key.
 
 Note: When you remove a device from the app and add it again, the device receives a new local key.
+
+### Find which device is which
+
+The card **Devices heard on the network** on the **Devices** tab shows each device that sends its ID on your Wi-Fi.
+The board asks your router for the name of each device. If the router does not know a name, the board asks with
+mDNS.
+
+| Data on the card | Meaning |
+|---|---|
+| Name | The name from the router or from the device, for example `lwip0` or `ESP_353DA3`. Many devices give a general name |
+| `id` | The device ID. The Smart Life app shows it as the Virtual ID: open the device, click the pencil, then **Device Information** |
+| Address, version | The IP address and the protocol version of the device |
+
+If the name does not tell you which device it is, make the device switch:
+
+**CAUTION: Do not do this test on a device that must stay on, for example a refrigerator, a pump or a medical
+device. The test switches the device.**
+
+1. Click **Try** on the device.
+2. Type the local key of the device in **Local key (16 characters)**.
+3. Click **Blink**. The device goes to the other state for 2 seconds, then back to its first state.
+4. Look at which device switched.
+5. Click **Use**. The page writes the ID, the address, the version, the data point and the key in **Add a device**.
+
+If the message shows that the data point is not an on/off switch, the page selects the data point that is `true` or
+`false`. Click **Blink** again. **On**, **Off** and **Read** also operate here. The board saves nothing until you click
+**Save device**.
 
 ### Add a device
 
@@ -451,6 +479,138 @@ keep-on time is complete.
 
 If the other board does not send its state for 9 seconds, the condition is false. This is true for `on` and for `off`.
 
+### One board sends the alerts of the group
+
+In a group, one board sends the alerts of all the boards. Thus two boards that see the same thing do not both send an
+alert, and the alerts of all the rooms can go out together in one message.
+
+- The board that sends the alerts is the board with alert settings that has the first name in alphabetical order.
+  Each board finds it from the messages of the other boards.
+- The other boards give their alerts to that board. The alert shows the room of the board that saw it.
+- If that board does not answer in 3 seconds, the board that saw it sends the alert itself.
+- If that board stops, the next board with alert settings sends the alerts.
+
+Each board keeps its own rules, because each board looks at a different place.
+
+To give the alert settings to each board of the group:
+
+1. Set up the alerts on one board (see [Receive an alert on Telegram](#receive-an-alert-on-telegram)).
+2. Open the **Alerts** tab of that board.
+3. Click **Use these alert settings on all boards in the group**.
+
+Then each board can send the alerts if the first board stops. The card also shows which board sends the alerts now.
+
+## Fewer messages
+
+The board sends the first alert immediately. Then, for 60 seconds, it keeps the alerts that come. At the end of the
+60 seconds, it sends them together as one message, for example:
+
+```
+More alerts in the last 60 s:
+- Someone is at the door (Hall, Kitchen), 3 times
+- A window opened (Garage)
+```
+
+After that message, the next 60 seconds start. Thus many alerts make a maximum of one message each 60 seconds.
+
+- To change the time, open the **Alerts** tab. Type the seconds in **Keep alerts for**, then click **Save**. Type `0`
+  to send each alert immediately.
+- To send the alerts of a rule immediately always, open the **Ideas** tab. Select **urgent: never kept back** for
+  that rule. Then click **Save changes**. Use this for a smoke alarm or for water on the floor.
+- The daily summary always goes immediately.
+
+## Low power (battery)
+
+Low power is for a board on a battery, in a place without a power socket. It is off until you switch it on.
+
+Without low power, the board looks all the time. The camera, the model and Wi-Fi operate all the time, and a battery
+lasts approximately one day. With low power, the board sleeps. It wakes some times each day, looks for some seconds,
+does what its rules say, and sleeps again. It connects to Wi-Fi only to send an alert or a command to a device, and at
+each check-in. Thus the board checks at points in time. It does not monitor all the time.
+
+The board can wake on a timer and on a motion sensor:
+
+- **Timer**: you set the wakes each day (1 to 1440). More wakes see more, and use more battery.
+- **Motion sensor** (optional): a PIR sensor (for example the AM312) on a free pin from 1 to 21. Movement wakes the
+  board, but a maximum of one time in the time that you set (30 seconds at the start).
+- **Wake hours** (optional): the board wakes only between two times, for example 07:00 and 22:00.
+
+### Make a plan and switch low power on
+
+1. Open the page of the board. Click the **Power** tab.
+2. In **Plan**, type the wakes each day, the look time, the hours between check-ins and the size of the battery.
+   The page shows the estimate of the days on one charge.
+3. Read **What changes when low power is on**.
+4. Select **I read what changes**. Then click **Switch low power on**.
+
+The board sleeps when nobody uses the page for one minute.
+
+### What changes when low power is on
+
+1. The board looks only at points in time. It sees nothing between two wakes. If something happens and stops
+   between two wakes, the board does not see it.
+2. Each wake starts the board again. The camera adjusts its light for 1 second. Then the board looks for the look
+   time and does what its rules say.
+3. The page operates only while the board is awake: for 5 minutes after you connect the power or push the reset
+   button, for 30 seconds at each check-in, and while a computer is connected to its USB socket. Changes to the
+   settings also need the board awake.
+4. Alerts come some seconds late, because Wi-Fi must connect first. The board does not keep alerts to send them
+   together. The cooldown of each rule still operates.
+5. These functions are off: the eye, the Wi-Fi movement score and continuous sound. Sound questions hear only the
+   look time.
+6. Conditions on rules of other boards are always off. The other boards see the rules of this board as not known
+   while it sleeps.
+7. The board does not send the alerts of other boards in the group. It gives its alerts to the board that sends
+   them, or it sends them itself. It sends alerts with a photo itself.
+8. Pins that rules set go back to off while the board sleeps.
+9. Smart Life devices switch slowly, because Wi-Fi and the device connection start at each wake.
+10. **for** and **hold** of a rule count the time between wakes. When two wakes see a condition, the board counts the
+    condition as true for all the time between them.
+11. The board sets its clock at check-ins. The wake hours and the daily summary use the clock. The daily summary goes
+    at the first wake after its time.
+12. The battery estimate is only an estimate. The camera of these boards stays on in standby while the board sleeps,
+    thus the real current can be higher.
+13. The board loads new firmware or a new model only while it is awake.
+
+### Open the page of a board that sleeps
+
+Do one of these steps:
+
+- Disconnect the battery and connect it again, or push the reset button. The board then stays awake for 5 minutes.
+- Connect the board to a computer with a USB data cable. The board does not sleep while a computer is connected. A
+  USB charger does not stop the sleep.
+- Wait for a check-in. The board stays awake for 30 seconds after it connects to Wi-Fi.
+
+To keep the board awake while you work, click **Stay awake** on the Power tab. To switch low power off, click
+**Switch low power off**. On the USB console, the commands are `power off`, `power stay` and `power go`.
+
+### The battery estimate
+
+The Power tab shows two estimates:
+
+- **Plan**: an estimate from the settings, before you switch low power on.
+- **Measured estimate**: an estimate from the time that the board was awake, asleep and on Wi-Fi. The board counts
+  these times. After you charge the battery, click **Start the counts again**.
+
+Both estimates use three currents: asleep, awake, and the added current of Wi-Fi. The values at the start are
+estimates for an ESP32-S3 camera board. They were not measured on your board. For a better estimate, measure the
+currents with a USB power meter or an INA219 sensor, and type them in **Currents**.
+
+Example with the values at the start: 96 wakes each day (one each 15 minutes), a look time of 3 seconds, a check-in
+each 12 hours, 5 alerts each day and a 2000 mAh battery give approximately 34 days.
+
+### Show the battery voltage (optional)
+
+The XIAO ESP32S3 charges a LiPo battery on its BAT pads, but the chip cannot read the battery voltage. To read it:
+
+1. Connect two equal resistors (for example 2 x 220 kOhm) in series from the battery + to GND.
+2. Connect the middle of the two resistors to a free pin from 1 to 10.
+3. On the Power tab, in **Battery voltage**, select the pin. Keep the ratio at 2. Click **Save**.
+4. Restart the board.
+
+The Live tab then shows `battery_v` and `battery_pct`. Click **Add a low-battery alert** for an urgent alert below
+15 %, a maximum of one each 12 hours.
+
 ## Receive an alert on Telegram
 
 1. In Telegram, start a chat with **@BotFather**.
@@ -481,6 +641,10 @@ The Alerts tab also has fields for a webhook (for ntfy, Discord, Slack or Home A
 - A command to a Smart Life device goes to that device on your Wi-Fi. It does not go to the internet.
 - Each board sends its name, its room and its firmware version to the local network each 2 seconds. A board in a
   group also sends the names and the states of its rules.
+- In a group, a board gives the text of its alerts to the board that sends the alerts, on your local network. For an
+  alert with a photo, that board gets the picture from the page of the board that saw it.
+- **Use these alert settings on all boards in the group** sends the bot token, the webhook and the MQTT settings to
+  each board of the group, on your local network, without encryption.
 - The Live tab shows the camera picture to each person who has the page open.
 - The Eye tab shows three pictures to each person who has that tab open. They are the picture of the eye (40 x 30
   points), a close-up (64 x 64 points) and the sharp close-up (160 x 120 points). The sharp close-up is sufficient to recognize
@@ -554,6 +718,14 @@ These items were tested on one XIAO ESP32S3 Sense with a Windows computer (firmw
 - A group with a computer that operated as a second board. The test included signed messages, a rule that follows
   the other board, and an old message that was sent again. It also included the page of one board through a
   different board.
+- The group alert sender with a computer that operated as a second board, and a webhook on the computer. The test
+  included alerts from the other board, alerts kept and sent together, an urgent alert, an alert sent again, an old
+  alert, an incorrect signature, an alert given to the other board, and no answer from the other board.
+- Low power on the XIAO, with 1440 wakes each day and a webhook on a computer. The board slept, woke on the timer
+  each minute, and connected to Wi-Fi only for an alert. The alert arrived approximately 5 seconds after the wake. The
+  rule kept its state through the sleep, thus it sent one alert, not one alert at each wake. A wake with no alert was
+  awake for approximately 5.5 seconds. `power off` on the console during a wake switched low power off. The Power tab
+  was examined in a browser at two widths.
 
 These items were not tested:
 
@@ -562,6 +734,11 @@ These items were not tested:
 - A command to a real Smart Life device. No local key was available. The simulated device uses the code of the
   tinytuya client, thus it agrees with that client, but a real device can be different.
 - Two real boards in a group. Only one board was available.
+- The current of a board in low power. No current meter was available. Thus the battery estimates use currents that
+  were not measured.
+- Low power with a motion sensor, with the battery voltage input, with wake hours, and at a check-in. Low power on
+  the ESP32-S3-CAM.
+- A photo alert from a different board of the group, and **Use these alert settings on all boards in the group**.
 - A Telegram message and a photo alert. Only the encrypted connection to the Telegram server was tested.
 - The close-up on the Eye tab with an object that moves. No object moved in front of the camera during the test.
 - The thresholds of the eye ideas (106 to 111) with persons in front of the board.

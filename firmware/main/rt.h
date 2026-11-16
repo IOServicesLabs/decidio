@@ -57,7 +57,7 @@ typedef struct {                // a rule (rules.c describes the JSON form)
     uint8_t edge;               // which change alerts
     int8_t dev;                 // the device this rule switches (slot in devices.c), -1 = none
     uint8_t dev_do;             // RT_DEV_*
-    bool notify, photo, count;
+    bool notify, photo, count, urgent;   // urgent: its alert is never held back to be grouped
 } rt_action_t;
 
 typedef struct {
@@ -134,6 +134,7 @@ void rt_cam_set_orient(int orient);
 typedef void (*rt_cam_zoom_fn)(const uint8_t *rgb565, uint16_t id, int x, int y, int w, int h, int took_ms);
 bool rt_cam_can_zoom(void);
 bool rt_cam_zoom(int x, int y, int w, uint16_t id, rt_cam_zoom_fn fn);
+void rt_cam_standby(void);                             // stop taking frames and put the sensor in standby (before deep sleep)
 
 // audio.c - PDM mic, streaming log-mel frames + raw PCM history
 int rt_audio_probe(int clk, int din);                  // listen for 0.2 s: the spread of the samples, 0 = nothing there
@@ -225,6 +226,14 @@ esp_err_t rt_actions_set(const char *json);            // rules from the web pag
 int rt_actions_json(char *dst, size_t cap);            // {"rules":[...],"state":[...],"custom":bool}
 int rt_actions_brief(char *dst, size_t cap);           // [["name",1],...]: which rules are on, for the other boards
 bool rt_actions_uses_dev(int slot);
+typedef struct {                // the rules' states, kept through deep sleep (power.c)
+    uint32_t crc;               // of the rules they belong to
+    int n, summary_day;
+    int64_t offset_us;          // esp_timer minus the wall clock when they were saved
+    rt_rule_state_t st[RT_MAX_ACT];
+} rt_actions_keep_t;
+void rt_actions_save(rt_actions_keep_t *k);
+bool rt_actions_restore(const rt_actions_keep_t *k);   // false: the rules changed since, nothing restored
 void rt_actions_clock(void);                           // time zone or summary time changed
 // model.c - the rules that came with the model package
 int rt_model_default_rules(rt_action_t *out, int max);
@@ -285,6 +294,7 @@ esp_err_t rt_dev_set(const struct cJSON *j, char *why, size_t cap);
 int rt_dev_json(char *dst, size_t cap);
 void rt_dev_step(int wait_ms);
 void rt_dev_wake(void);
+bool rt_dev_pending(void);                             // a device command waits to be sent
 
 // home.c - the other boards in the home: who is there, which of their rules are on
 void rt_home_start(void);
@@ -292,6 +302,10 @@ void rt_home_reload(void);
 void rt_home_changed(void);                            // a rule of this board changed: tell the others now
 float rt_peer_value(const char *host, const char *rule);   // 1 / 0, < 0 = not known
 bool rt_home_peer_ip(const char *host, char *ip, size_t cap);
+bool rt_home_sender(char *ip, size_t ip_cap, char *host, size_t host_cap);   // true: another board sends the alerts
+bool rt_home_handoff(const struct cJSON *alert, const char *ip);  // give it an alert; true when it said it has it
+const char *rt_home_label(void);                       // this board's room, or its name when it has no room
+int rt_home_members(char ips[][16], char hosts[][20], int max);  // the other boards of the group heard lately
 bool rt_home_token_ok(const char *tok);
 const char *rt_home_token(void);
 const char *rt_home_secret(void);
@@ -311,10 +325,32 @@ typedef struct {
 void rt_alert_start(void);
 uint8_t *rt_snapshot_jpg(size_t *len);                 // the model's current frame, 192x192; caller frees
 void rt_alert_reload(void);                            // settings changed
-void rt_alert_event(const char *rule, const char *text, bool on, float p, bool photo);
+void rt_alert_event(const char *rule, const char *text, bool on, float p, bool photo, bool urgent);
+bool rt_alert_ready(void);                             // at least one destination is set
+bool rt_alert_idle(void);                              // nothing waits to be sent (power.c, before deep sleep)
+// an alert from another board of the group, for this board to send (home.c); false: no room for it now
+bool rt_alert_from_peer(const char *host, const char *label, const char *ip, const char *rule, const char *text, bool on,
+                        float p, bool photo, bool urgent, long long t);
+int rt_alert_share(char *dst, size_t cap);             // copy this board's alert settings to the group (web.c)
 bool rt_alert_test(const char *dest, rt_alert_result_t *out);    // "telegram" | "webhook" | "mqtt" | "probe"; waits
 int rt_alert_json(char *dst, size_t cap);              // what is configured, and counters (never the secrets)
 bool rt_dev_test(int slot, const char *what, rt_alert_result_t *out, char *dps, size_t dps_cap);   // devices.c: on | off | status
+bool rt_dev_try(const struct cJSON *j, rt_alert_result_t *out, char *dps, size_t dps_cap);  // devices.c: a device not saved yet
+
+// power.c - low-power mode, off by default: deep sleep between short looks (checks at points in time)
+void rt_power_early(void);                             // after the settings store: may go back to sleep at once
+void rt_power_start(void);                             // after start-up, before the decision task
+bool rt_power_on(void);                                // low-power mode is set
+bool rt_power_net_now(void);                           // join Wi-Fi at start (false: only when something must go out)
+void rt_power_need_net(void);                          // something must go out: join Wi-Fi now
+void rt_power_touch(void);                             // the page was used: stay awake a little longer (web.c)
+bool rt_power_fast_ap(uint8_t bssid[6], uint8_t *channel);   // the network joined last time (wifi.c)
+void rt_power_joined(const uint8_t bssid[6], uint8_t channel);
+void rt_power_note_sender(const char *ip, const char *host);  // the group's sender ("": it did not answer)
+bool rt_power_sender(char *ip, size_t ip_cap, char *host, size_t host_cap);   // the sender heard at an earlier wake
+esp_err_t rt_power_set(const struct cJSON *j, char *why, size_t cap);
+int rt_power_json(char *dst, size_t cap);
+bool rt_power_command(const char *arg, const char *arg2);   // console: power [on|off|stay|go|wakes <n>]
 
 #ifdef __cplusplus
 }

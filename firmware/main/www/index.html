@@ -63,6 +63,7 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
 </header>
 <main>
   <div class="banner" id="setupBanner" hidden>This board is not on your Wi-Fi yet. Pick your network on the Wi-Fi tab.</div>
+  <div class="banner" id="lpBanner" hidden></div>
 
   <section id="t-status">
     <div class="card"><h2>Board</h2><dl class="kv" id="board"></dl></div>
@@ -142,6 +143,13 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <p class="note">A camera sees nothing in a dark room, so "on while someone is in the room" cannot switch a light on at night by itself. "Also on movement" adds the radio movement score, which works in the dark but also sees pets, fans and movement behind walls.</p>
     </div>
     <div class="card">
+      <h2>Devices heard on the network</h2>
+      <div id="heard"></div>
+      <p class="note">The name comes from your router or from the device. Many devices give a general name, for example lwip0 or ESP_353DA3 (the last 6 characters of its MAC address). If the name does not tell you which device it is, use Blink. Also, you can compare the id with the Virtual ID in the Smart Life app: open the device, click the pencil, then Device Information.</p>
+      <p class="note">To find which device an id is, click Try, type its local key and click Blink. The device goes to the other state for 2 seconds, then back. Nothing is saved until you click Use and Save device.</p>
+      <p class="note"><b>CAUTION:</b> Do not try a device that must stay on, for example a refrigerator, a pump or a medical device. Try switches it.</p>
+    </div>
+    <div class="card">
       <h2 id="devFormTitle">Add a device</h2>
       <label for="dFound">Heard on the network</label><select id="dFound"></select>
       <div class="grid" style="margin-top:8px">
@@ -196,7 +204,7 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <label for="hook_url">Address (http:// or https://)</label><input id="hook_url" autocomplete="off" placeholder="unchanged">
       <label for="hook_hdr">Extra header (optional), e.g. Authorization: Bearer ...</label><input id="hook_hdr" autocomplete="off" placeholder="unchanged">
       <label for="hook_fmt">Body</label>
-      <select id="hook_fmt"><option value="json">JSON (text, content, device, event, state, p, time)</option><option value="text">Plain text (ntfy)</option></select>
+      <select id="hook_fmt"><option value="json">JSON (text, content, device, room, event, state, p, time)</option><option value="text">Plain text (ntfy)</option></select>
       <div class="row"><button class="b" data-save="hook_url,hook_hdr,hook_fmt">Save</button><button class="b ghost" data-test="webhook">Send test</button></div>
       <div class="msg" id="m-webhook"></div>
     </div>
@@ -209,9 +217,85 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <div class="msg" id="m-mqtt"></div>
       <p class="note">Topics: decidio/<span class="h"></span>/event/&lt;rule&gt; and decidio/<span class="h"></span>/status.</p>
     </div>
+    <div class="card"><h2>Fewer messages</h2>
+      <p class="note" style="margin-top:0">The first alert goes out at once. The alerts in the next seconds are kept, and then go out together as one message. An alert of a rule marked <b>urgent</b> always goes out at once.</p>
+      <label for="alert_window">Keep alerts for (seconds, 0 = send each alert at once)</label><input id="alert_window" type="number" min="0" max="3600" step="10" style="max-width:140px">
+      <div class="row"><button class="b" data-save="alert_window">Save</button></div>
+      <div class="msg" id="m-window"></div>
+      <div id="groupAlerts" hidden>
+        <p class="note" id="senderNote"></p>
+        <div class="row"><button class="b ghost" id="shareAlerts">Use these alert settings on all boards in the group</button></div>
+        <div class="msg" id="m-share"></div>
+        <p class="note">This copies the Telegram, webhook and MQTT settings of this board to the other boards of the group. If the board that sends the alerts stops, the next board can then send them.</p>
+      </div>
+    </div>
     <div class="card"><h2>Connection</h2>
       <p class="note" style="margin-top:0">Saved fields are never shown again; leave one empty to keep it. To clear a destination, type a single dash (-) and save.</p>
       <button class="b ghost" data-test="probe">Check the internet connection</button><div class="msg" id="m-probe"></div></div>
+  </section>
+
+  <section id="t-power">
+    <div class="card"><h2>Low power (battery)</h2>
+      <p class="note" style="margin-top:0" id="lpState"></p>
+      <p class="note">Low power is for a board on a battery in a place without a power socket. The board sleeps, and wakes some times a day to look for a few seconds. It is off until you switch it on. Read <b>What changes</b> below first.</p></div>
+    <div class="card"><h2>Plan</h2>
+      <div class="grid">
+        <div><label for="lpWakes">Wakes a day</label><input id="lpWakes" type="number" min="1" max="1440" value="96"></div>
+        <div><label for="lpLook">Look time (s)</label><input id="lpLook" type="number" min="1" max="30" value="3"></div>
+        <div><label for="lpCheckin">Check-in every (h)</label><input id="lpCheckin" type="number" min="1" max="48" value="12"></div>
+        <div><label for="lpMah">Battery (mAh)</label><input id="lpMah" type="number" min="50" max="100000" value="2000"></div>
+        <div><label for="lpAlerts">Alerts a day (for the estimate)</label><input id="lpAlerts" type="number" min="0" max="500" value="5"></div>
+      </div>
+      <p class="note" id="lpEvery"></p>
+      <label class="chk" style="margin-top:10px"><input type="checkbox" id="lpHours">Wake only between</label>
+      <div class="row"><input id="lpFrom" type="time" value="07:00" style="max-width:140px"><span>and</span><input id="lpTo" type="time" value="22:00" style="max-width:140px"></div>
+      <div class="grid" style="margin-top:4px">
+        <div><label for="lpPir">Motion sensor pin (also wakes the board)</label><select id="lpPir"></select></div>
+        <div><label for="lpGap">Motion: at most one wake each (s)</label><input id="lpGap" type="number" min="5" max="3600" value="30"></div>
+      </div>
+      <div class="big" id="lpDays" style="margin-top:12px">-</div>
+      <dl class="kv" id="lpParts"></dl>
+      <details style="margin-top:10px"><summary class="note" style="display:inline;cursor:pointer">Currents (estimates, not measured)</summary>
+        <div class="grid">
+          <div><label for="lpIs">Asleep (mA)</label><input id="lpIs" type="number" min="0.001" max="500" step="0.1" value="1"></div>
+          <div><label for="lpIa">Awake (mA)</label><input id="lpIa" type="number" min="1" max="1000" value="110"></div>
+          <div><label for="lpIw">More with Wi-Fi (mA)</label><input id="lpIw" type="number" min="0" max="1000" value="90"></div>
+        </div>
+        <p class="note">These numbers are estimates for an ESP32-S3 camera board. They were not measured on your board. A USB power meter or an INA219 sensor gives the real values. Type them here for a better estimate.</p>
+      </details>
+      <div class="row"><button class="b" id="lpSave">Save the plan</button></div><div class="msg" id="lpMsg"></div></div>
+    <div class="card"><h2>What changes when low power is on</h2>
+      <ol class="note" style="padding-left:20px;margin-top:0">
+        <li>The board looks only at points in time. It sees nothing between two wakes. If something happens and stops between two wakes, the board does not see it.</li>
+        <li>Each wake starts the board again. The camera adjusts its light for 1 second. Then the board looks for the look time and does what its rules say.</li>
+        <li>This page works only while the board is awake: for 5 minutes after you connect the power or push the reset button, for 30 seconds at each check-in, and while a computer is connected to its USB socket. Changes to the settings also need the board awake.</li>
+        <li>Alerts come some seconds late, because Wi-Fi must connect first. The board does not keep alerts to send them together. The cooldown of each rule still works.</li>
+        <li>These are off: the fly eye, the Wi-Fi movement score and continuous sound. Sound questions hear only the look time.</li>
+        <li>Conditions on rules of other boards are always off. The other boards see the rules of this board as not known while it sleeps.</li>
+        <li>This board does not send the alerts of other boards in the group. It gives its alerts to the board that sends them, or sends them itself. It sends alerts with a photo itself.</li>
+        <li>Pins that rules set go back to off while the board sleeps.</li>
+        <li>Smart Life devices switch slowly, because Wi-Fi and the device connection start at each wake.</li>
+        <li><b>for</b> and <b>hold</b> of a rule count the time between wakes: when two wakes see a condition, the board counts it as true for all the time between them.</li>
+        <li>The clock is set at check-ins. The wake hours and the daily summary use it. The daily summary goes at the first wake after its time.</li>
+        <li>The battery estimate is an estimate. The camera of these boards stays on in standby while the board sleeps, so the real current can be higher.</li>
+        <li>The board loads new firmware or a new model only while it is awake.</li>
+      </ol></div>
+    <div class="card"><h2>Switch</h2>
+      <label class="chk"><input type="checkbox" id="lpRead">I read what changes</label>
+      <div class="row"><button class="b" id="lpOn" disabled>Switch low power on</button><button class="b danger" id="lpOff" hidden>Switch low power off</button>
+        <button class="b ghost" id="lpStay" hidden>Stay awake</button></div>
+      <div class="msg" id="lpSwMsg"></div>
+      <label class="chk" style="margin-top:10px"><input type="checkbox" id="lpUsb">Sleep also while a computer is connected to USB (for tests)</label></div>
+    <div class="card"><h2>Now</h2><dl class="kv" id="lpNow"></dl>
+      <div class="row"><button class="b ghost" id="lpReset">Start the counts again (after you charge)</button></div></div>
+    <div class="card"><h2>Battery voltage (optional)</h2>
+      <p class="note" style="margin-top:0">Connect two equal resistors (for example 2 x 220 kOhm) in series from the battery + to GND. Connect their middle to a free pin from 1 to 10. The board then shows <b>battery_v</b> and <b>battery_pct</b> as inputs.</p>
+      <div class="grid">
+        <div><label for="batPin">Pin</label><select id="batPin"></select></div>
+        <div><label for="batRatio">Ratio (2 for two equal resistors)</label><input id="batRatio" type="number" min="1" max="10" step="0.01" value="2"></div>
+      </div>
+      <div class="row"><button class="b ghost" id="batSave">Save (the board uses it after a restart)</button><button class="b ghost" id="batRule">Add a low-battery alert</button></div>
+      <div class="msg" id="batMsg"></div></div>
   </section>
 
   <section id="t-radio">
@@ -290,7 +374,7 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
 <script>
 const $ = id => document.getElementById(id);
 const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props || {}); e.append(...kids); return e; };
-const TABS = [["status","Status"],["live","Live"],["eye","Eye"],["ideas","Ideas"],["devices","Devices"],["boards","Boards"],["alerts","Alerts"],["radio","Radio"],["wifi","Wi-Fi"],["system","System"]];
+const TABS = [["status","Status"],["live","Live"],["eye","Eye"],["ideas","Ideas"],["devices","Devices"],["boards","Boards"],["alerts","Alerts"],["power","Power"],["radio","Radio"],["wifi","Wi-Fi"],["system","System"]];
 let inputs = null, eyeTracks = [], eyeBusy = false;
 let info = null, state = null, recipes = null, draft = null, dirty = false, tab = "status";
 let via = new URLSearchParams(location.search).get("board") || "", home = null, devs = null, editSlot = -1, boardsSig = "";
@@ -306,6 +390,7 @@ function show(t) {
   if (t === "ideas" || t === "devices") loadDevs();
   if (t === "boards") { boardsSig = ""; loadHome(); }
   if (t === "live" || t === "ideas" || t === "system") loadInputs();
+  if (t === "power") loadPower(true);
   tick();
 }
 for (const [id, name] of TABS) $("nav").append(el("button", { id: "n-" + id, textContent: name, onclick: () => show(id) }));
@@ -348,9 +433,11 @@ async function refresh() {
   $("n-eye").hidden = !sn.camera; $("camCard").hidden = !sn.camera;
   drawSens();
   if (first) loadInputs();
-  kv($("tally"), [["Telegram", line(a.telegram)], ["Webhook", line(a.webhook)], ["MQTT", line(a.mqtt) + (a.mqtt.set ? (a.mqtt.connected ? ", connected" : ", not connected") : "")], ["Dropped", a.dropped]]);
+  loadPower(false);
+  kv($("tally"), [["Telegram", line(a.telegram)], ["Webhook", line(a.webhook)], ["MQTT", line(a.mqtt) + (a.mqtt.set ? (a.mqtt.connected ? ", connected" : ", not connected") : "")], ["Dropped", a.dropped],
+    ...(a.window !== undefined ? [["Kept and sent together", a.grouped], ["Given to the board that sends the alerts", a.handed]] : [])]);
   if (first) {
-    $("tg_chat").value = a.telegram.chat; $("hook_fmt").value = a.webhook.format; $("sumAt").value = hhmm(d.summary_at);
+    $("tg_chat").value = a.telegram.chat; $("hook_fmt").value = a.webhook.format; $("alert_window").value = a.window ?? 60; $("sumAt").value = hhmm(d.summary_at);
     if (w.state === "online" && d.tz !== browserTz()) api("/api/time", { tz: browserTz() });
     fillQuestions();
     const h = location.hash.slice(1);
@@ -453,7 +540,7 @@ function drawRules() {
         field("Switch a device", pick([["", devs && devs.devices.length ? "none" : "none (add one on the Devices tab)"], ...(devs ? devs.devices.map(d => [d.name, d.name]) : []), ...(r.device && !(devs && devs.devices.some(d => d.name === r.device)) ? [[r.device, r.device]] : [])], r.device || "",
           v => { if (v) { r.device = v; r.device_do = r.device_do || "follow"; } else { delete r.device; delete r.device_do; } drawRules(); })),
         ...(r.device ? [field("How", pick([["follow", "on while the rule is on"], ["inverse", "off while the rule is on"], ["on", "switch on when it starts"], ["off", "switch off when it starts"]], r.device_do || "follow", v => r.device_do = v))] : [])),
-      el("div", { className: "row", style: "margin-top:8px" }, check("send an alert", r.notify, v => r.notify = v), check("with a photo", r.photo, v => r.photo = v), check("count for the daily summary", r.count, v => r.count = v)),
+      el("div", { className: "row", style: "margin-top:8px" }, check("send an alert", r.notify, v => r.notify = v), check("with a photo", r.photo, v => r.photo = v), check("count for the daily summary", r.count, v => r.count = v), ...(r.notify ? [check("urgent: never kept back", !!r.urgent, v => r.urgent = v)] : [])),
       r.notify ? el("div", { className: "grid", style: "margin-top:6px" },
         field("Alert text", el("input", { value: r.text, maxLength: 71, placeholder: r.name, oninput: e => { r.text = e.target.value; dirty = true; } })),
         field("At most every (seconds)", num(r.cooldown_s, v => r.cooldown_s = Math.round(v), 10))) : "",
@@ -498,7 +585,7 @@ $("addOwn").onclick = () => {
   const q = $("nq").value, radio = q === "radio_motion", board = q.startsWith("board:"), inp = q.startsWith("in:"), bq = q.split("|");
   const name = ($("nn").value.trim() || (radio ? "movement" : inp ? "on_" + q.slice(3) : board ? "when_" + bq[1] : q + "_" + $("no").value)).replace(/["\\]/g, "").slice(0, 31);
   if (draft.some(r => r.name === name)) return say($("rulesMsg"), false, "There is already a rule called " + name + ".");
-  draft.push({ name, when: [radio ? { q, op: ">=", p: Number($("np").value) } : inp ? { q, op: $("no").value === "below" ? "<" : ">=", p: Number($("np").value) } : board ? { q: bq[0], o: bq[1], op: $("no").value === "off" ? "<" : ">=", p: 0.5 } : { q, o: $("no").value, op: ">=", p: Number($("np").value) }], for_ms: 300, hold_ms: 5000, on: "start", gpio: -1, level: 1, text: "", notify: true, photo: false, cooldown_s: 60, count: false });
+  draft.push({ name, when: [radio ? { q, op: ">=", p: Number($("np").value) } : inp ? { q, op: $("no").value === "below" ? "<" : ">=", p: Number($("np").value) } : board ? { q: bq[0], o: bq[1], op: $("no").value === "off" ? "<" : ">=", p: 0.5 } : { q, o: $("no").value, op: ">=", p: Number($("np").value) }], for_ms: 300, hold_ms: 5000, on: "start", gpio: -1, level: 1, text: "", notify: true, photo: false, cooldown_s: 60, count: false, urgent: false });
   dirty = true; drawRules(); say($("rulesMsg"), true, "Added " + name + ". Adjust it above, then save.");
 };
 
@@ -537,6 +624,13 @@ function drawIdeas() {
 $("filter").oninput = drawIdeas;
 
 // ---- alerts ----
+$("shareAlerts").onclick = async () => {
+  const b = $("shareAlerts"), m = $("m-share"); b.disabled = true; say(m, true, "Copying...");
+  let r; try { r = await call("/api/alerts/share", {}); } catch (e) { r = {}; }
+  b.disabled = false;
+  const all = r.boards || [], bad = all.filter(x => !x.ok);
+  say(m, all.length && !bad.length, !all.length ? "No other board of the group answered." : bad.length ? "Not copied to: " + bad.map(x => x.host).join(", ") + "." : "Copied to " + all.map(x => x.host).join(", ") + ".");
+};
 document.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
   const o = {};
   for (const k of b.dataset.save.split(",")) { const e = $(k), v = e.value.trim(); if (v === "-") o[k] = ""; else if (v || !e.placeholder) o[k] = v; }
@@ -619,8 +713,65 @@ function drawDevs() {
     : [el("p", { className: "note", style: "margin:0", textContent: "None yet. Add one below." })]));
   const have = new Set(devs.devices.map(d => d.id)), free = devs.found.filter(x => !have.has(x.id)), keep = $("dFound").value;
   $("dFound").replaceChildren(el("option", { value: "", textContent: free.length ? "Pick one of " + free.length + " heard (or type the id below)" : "None heard yet (devices announce themselves every few seconds)" }),
-    ...free.map(x => el("option", { value: x.id, textContent: x.id + "  -  " + x.ip + ", version " + x.ver })));
+    ...free.map(x => el("option", { value: x.id, textContent: (x.name ? x.name + "  -  " : "") + x.id + "  -  " + x.ip + ", version " + x.ver })));
   if (free.some(x => x.id === keep)) $("dFound").value = keep;
+  drawHeard(false);
+}
+
+// ---- devices heard on the network: a name, and a quick switch to find which one is which ----
+const tryKey = {}, tryDp = {}, tryMsg = {};
+let tryOpen = "", heardSig = "";
+const dpOf = x => tryDp[x.id] || (x.ver >= "3.4" ? 20 : 1);
+function drawHeard(force) {
+  if (!devs) return;
+  const have = new Set(devs.devices.map(d => d.id)), free = devs.found.filter(x => !have.has(x.id));
+  const sig = JSON.stringify(free) + tryOpen + JSON.stringify(tryMsg) + JSON.stringify(tryDp);
+  if (!force && (sig === heardSig || ($("heard").contains(document.activeElement) && document.activeElement.tagName === "INPUT"))) return;
+  heardSig = sig;
+  const btn = (text, fn) => el("button", { className: "b sm ghost", textContent: text, onclick: fn });
+  $("heard").replaceChildren(...(free.length ? free.map(x => {
+    const open = tryOpen === x.id, m = tryMsg[x.id];
+    const kids = [
+      el("div", { className: "row" },
+        el("h3", { className: "grow", textContent: x.name || (x.named ? "No name from the network" : "Looking for a name...") }),
+        btn(open ? "Close" : "Try", () => { tryOpen = open ? "" : x.id; drawHeard(true); }),
+        btn("Use", () => heardUse(x))),
+      el("div", { className: "cond", textContent: "id " + x.id + ", " + x.ip + ", version " + x.ver + (x.product ? ", product " + x.product : "") })];
+    if (open) {
+      const key = el("input", { id: "tk-" + x.id, type: "password", maxLength: 16, autocomplete: "off", value: tryKey[x.id] || "", oninput: e => { tryKey[x.id] = e.target.value; } });
+      const dp = el("input", { id: "td-" + x.id, type: "number", min: 1, max: 255, value: dpOf(x), oninput: e => { tryDp[x.id] = Number(e.target.value) || 0; } });
+      kids.push(el("div", { className: "grid", style: "margin:6px 0 0 18px" },
+        el("div", null, el("label", { htmlFor: "tk-" + x.id, textContent: "Local key (16 characters)" }), key),
+        el("div", null, el("label", { htmlFor: "td-" + x.id, textContent: "On/off data point" }), dp)));
+      kids.push(el("div", { className: "row", style: "margin:6px 0 0 18px" },
+        btn("Blink", () => heardTry(x, "blink")), btn("On", () => heardTry(x, "on")), btn("Off", () => heardTry(x, "off")), btn("Read", () => heardTry(x, "status"))));
+    }
+    if (m) kids.push(el("div", { className: "msg " + (m[0] ? "ok" : "bad"), style: "margin-left:18px", textContent: m[1] }));
+    return el("div", { className: "rule" }, ...kids);
+  }) : [el("p", { className: "note", style: "margin:0", textContent: "No device heard yet. Each device sends its id every few seconds while it is on this Wi-Fi." })]));
+}
+async function heardTry(x, what) {
+  const key = tryKey[x.id] || "";
+  if (key.length !== 16) { tryMsg[x.id] = [false, "Type the local key of the device (16 characters) first."]; return drawHeard(true); }
+  const dp = dpOf(x);
+  tryMsg[x.id] = [true, what === "blink" ? "The device switches for 2 seconds..." : "Asking the device..."]; drawHeard(true);
+  let r; try { r = await api("/api/devices/try", { id: x.id, ip: x.ip, ver: x.ver, key, dp, do: what }); } catch (e) { r = { detail: "no answer from the board" }; }
+  const a = r.answer && (r.answer.dps || (r.answer.data && r.answer.data.dps));
+  const done = { blink: "The device switched and came back.", on: "The device is on.", off: "The device is off.", status: "The device answered." };
+  let text = r.ok ? done[what] + " (" + r.ms + " ms)" : "Failed: " + (r.detail || r.error || "");
+  if (a) {
+    text += " Data points: " + JSON.stringify(a) + ".";
+    const sw = Object.keys(a).filter(k => typeof a[k] === "boolean");
+    if (sw.length && !sw.includes(String(dp))) { tryDp[x.id] = Number(sw[0]); text += " Data point " + sw[0] + " is true or false, thus it is probably the switch. It is now selected."; }
+  }
+  tryMsg[x.id] = [r.ok, text]; drawHeard(true);
+}
+function heardUse(x) {
+  devFormReset();
+  $("dFound").value = x.id; $("dId").value = x.id; $("dIp").value = x.ip; $("dVer").value = x.ver; $("dDp").value = dpOf(x);
+  if (tryKey[x.id]) $("dKey").value = tryKey[x.id];
+  if (x.name) $("dName").value = x.name.split(".")[0].replace(/[^A-Za-z0-9 _-]/g, " ").slice(0, 19).trim();
+  $("dName").focus(); $("dName").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 function devSay(d, ok, text) { devMsg[d.slot] = [ok, text]; drawDevs(); }
 async function devTest(d, what) {
@@ -663,7 +814,7 @@ async function follow(d, radio) {
   if (!radio && !have.includes("person_present")) return devSay(d, false, "This board's model does not answer person_present.");
   if (cur.length >= 16) return devSay(d, false, "The board holds 16 rules. Remove one on the Ideas tab first.");
   const rule = { name, when: [radio ? { q: "radio_motion", op: ">=", p: 0.06 } : { q: "person_present", o: "true", op: ">=", p: 0.6 }], for_ms: radio ? 0 : 300, hold_ms: 180000,
-    on: "start", gpio: -1, level: 1, text: "", notify: false, photo: false, cooldown_s: 60, count: false, device: d.name, device_do: "follow" };
+    on: "start", gpio: -1, level: 1, text: "", notify: false, photo: false, cooldown_s: 60, count: false, urgent: false, device: d.name, device_do: "follow" };
   const r = await api("/api/rules", cur.concat([rule]));
   if (r.ok && radio) api("/api/radio", { motion: true });
   dirty = false;
@@ -685,6 +836,12 @@ async function loadHome() {
     if (info) fillQuestions();
   }
   $("viaRow").hidden = !m.length;
+  $("groupAlerts").hidden = !h.group || !m.length;
+  if (h.sender !== undefined) {
+    const s = h.sender === h.host ? h : m.find(b => b.host === h.sender);
+    $("senderNote").textContent = !h.sender ? "No board of the group has alert settings. Set them up on one board, then copy them with the button below."
+      : "The alerts of the whole group go out from " + label(s || { host: h.sender }) + (h.sender === h.host ? " (this board)." : ". The other boards give their alerts to it.");
+  }
   if (tab === "boards") drawBoards();
 }
 function switchTo(h) {
@@ -849,6 +1006,90 @@ $("i2Scan").onclick = async () => {
 async function setBoard(p) { const r = await api("/api/board", { profile: p }); say($("sensMsg"), r.ok, r.ok ? "Saved. Restart the board." : (r.error || "no answer")); }
 $("detect").onclick = () => setBoard("auto");
 $("profile").onchange = () => { if ($("profile").value) setBoard($("profile").value); };
+
+// ---- low power ----
+let power = null;
+const mins = v => { const [h, m] = (v || "0:0").split(":").map(Number); return h * 60 + m; };
+const when = t => t ? new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "not known (the clock is not set)";
+const dur = s => s >= 86400 ? (s / 86400).toFixed(1) + " days" : s >= 3600 ? (s / 3600).toFixed(1) + " h" : s >= 60 ? Math.round(s / 60) + " min" : Math.round(s) + " s";
+function plan() {
+  const n = id => Number($(id).value);
+  return { wakes: n("lpWakes"), look: n("lpLook"), checkin: n("lpCheckin"), mah: n("lpMah"), gap: n("lpGap"), pir: Number($("lpPir").value),
+    from: $("lpHours").checked ? mins($("lpFrom").value) : -1, to: $("lpHours").checked ? mins($("lpTo").value) : -1,
+    i_sleep: n("lpIs"), i_awake: n("lpIa"), i_wifi: n("lpIw") };
+}
+// mAh a day. A look: 2.5 s (start and 1 s for the light; measured on a XIAO) + the look time. An alert: about 6 s more with Wi-Fi.
+// A check-in: about 45 s with Wi-Fi. These times are estimates; the counts in "Now" are measured on the board.
+function drawPlan() {
+  const p = plan(), alerts = Number($("lpAlerts").value) || 0;
+  const hours = p.from < 0 ? 24 : ((p.to - p.from + 1440) % 1440) / 60;
+  const looks = p.wakes * hours / 24, lookS = 2.5 + p.look, ia = p.i_awake, iw = p.i_awake + p.i_wifi;
+  const parts = [["Asleep", p.i_sleep * 24], ["Looks (" + Math.round(looks) + " a day)", looks * lookS * ia / 3600],
+    ["Alerts (" + alerts + " a day)", alerts * 6 * iw / 3600], ["Check-ins (" + (24 / p.checkin).toFixed(1) + " a day)", 24 / p.checkin * 45 * iw / 3600]];
+  const day = parts.reduce((a, x) => a + x[1], 0), days = 0.8 * p.mah / day;
+  $("lpEvery").textContent = p.wakes > 0 ? "One look each " + dur(86400 / p.wakes) + (p.from < 0 ? "." : ", only in the wake hours.") : "";
+  $("lpDays").textContent = isFinite(days) ? "about " + (days >= 2 ? Math.round(days) : days.toFixed(1)) + " days on one charge" : "-";
+  kv($("lpParts"), [...parts.map(([k, v]) => [k, v.toFixed(1) + " mAh a day"]), ["Total", day.toFixed(1) + " mAh a day; 80 % of the battery is used for the estimate"]]);
+}
+for (const id of ["lpWakes", "lpLook", "lpCheckin", "lpMah", "lpAlerts", "lpHours", "lpFrom", "lpTo", "lpIs", "lpIa", "lpIw", "lpPir", "lpGap"]) $(id).oninput = drawPlan;
+function pinOpts(box, max, v) {
+  const pins = (info ? info.info.pins : []).filter(x => x >= 1 && x <= max);
+  box.replaceChildren(el("option", { value: -1, textContent: "none" }), ...pins.map(x => el("option", { value: x, textContent: "GPIO " + x })));
+  box.value = v;
+}
+async function loadPower(fill) {
+  let p; try { p = await api("/api/power"); } catch (e) { return; }
+  if (!p || p.on === undefined) return;
+  power = p;
+  const n = p.now, c = p.count;
+  $("lpBanner").hidden = !p.on;
+  $("lpBanner").textContent = p.on ? "Low power is on: the board looks " + p.wakes + " times a day and sleeps between. " + (n.usb ? "It does not sleep now: a computer is on its USB socket." : n.stay ? "It stays awake now (Power tab)." : "It sleeps when you do not use this page for a minute.") : "";
+  $("lpState").textContent = p.on ? "On. Now: " + n.mode + (n.usb ? ", a computer is on USB (no sleep)" : "") + (n.stay ? ", staying awake" : "") + "." : "Off. The board works all the time and needs a power socket.";
+  $("lpOn").hidden = p.on; $("lpOff").hidden = !p.on; $("lpStay").hidden = !p.on;
+  $("lpStay").textContent = n.stay ? "Let it sleep" : "Stay awake";
+  $("lpOn").disabled = !$("lpRead").checked;
+  const hrs = (c.awake_s + c.asleep_s) / 3600;
+  const used = (c.awake_s * p.i_awake + c.wifi_s * p.i_wifi + c.asleep_s * p.i_sleep) / 3600;
+  const meas = hrs >= 1 && c.asleep_s > 0 ? "about " + Math.round(0.8 * p.mah / (used / hrs * 24)) + " days on one charge (" + (used / hrs * 24).toFixed(1) + " mAh a day, from " + dur(hrs * 3600) + " of counts)" : "after one hour of counts with sleep";
+  kv($("lpNow"), [["Now", n.mode + ", awake " + dur(n.up_s)], ["Wakes", c.wakes + " (" + c.timer + " on the timer, " + c.motion + " on motion, " + c.checkins + " check-ins, " + c.short + " only to arm the motion pin)"],
+    ["Awake", dur(c.awake_s) + ", with Wi-Fi " + dur(c.wifi_s) + " (" + c.wifi + " times)"], ["Asleep", dur(c.asleep_s) + (c.last_sleep_s ? ", last sleep " + dur(c.last_sleep_s) : "")],
+    ["Measured estimate", meas], ["Next look", p.on ? when(p.next_look) : "-"], ["Next check-in", p.on ? when(p.next_checkin) : "-"],
+    ["Battery", p.battery ? p.battery.v.toFixed(2) + " V, about " + p.battery.pct + " %" : "no battery input"],
+    ["Counted since", c.since ? new Date(c.since * 1000).toLocaleString() : "the last power-on"]]);
+  if (!fill) return;
+  $("lpWakes").value = p.wakes; $("lpLook").value = p.look; $("lpCheckin").value = p.checkin; $("lpMah").value = p.mah; $("lpGap").value = p.gap;
+  $("lpIs").value = p.i_sleep; $("lpIa").value = p.i_awake; $("lpIw").value = p.i_wifi; $("lpUsb").checked = p.usb_sleep;
+  $("lpHours").checked = p.from >= 0; if (p.from >= 0) { $("lpFrom").value = hhmm(p.from); $("lpTo").value = hhmm(p.to); }
+  pinOpts($("lpPir"), 21, p.pir); pinOpts($("batPin"), 10, p.bat_pin); $("batRatio").value = p.bat_ratio;
+  drawPlan();
+}
+async function powerSet(o, box, ok) {
+  const r = await api("/api/power", o);
+  say(box, r.ok, r.ok ? ok : "Not saved: " + (r.error || "no answer"));
+  await loadPower(false);
+  return r.ok;
+}
+$("lpSave").onclick = () => powerSet(plan(), $("lpMsg"), "Saved.");
+$("lpRead").onchange = () => { $("lpOn").disabled = !$("lpRead").checked; };
+$("lpOn").onclick = () => powerSet({ ...plan(), on: true }, $("lpSwMsg"), "Low power is on. The board sleeps when you do not use this page for a minute. To open this page again: connect the power again, push reset, wait for a check-in, or connect a computer to USB.");
+$("lpOff").onclick = () => powerSet({ on: false }, $("lpSwMsg"), "Low power is off. The board works all the time.");
+$("lpStay").onclick = () => powerSet({ stay: !(power && power.now.stay) }, $("lpSwMsg"), power && power.now.stay ? "The board sleeps again when you do not use this page for a minute." : "The board stays awake until you click Let it sleep, or until it restarts.");
+$("lpUsb").onchange = () => powerSet({ usb_sleep: $("lpUsb").checked }, $("lpSwMsg"), "Saved.");
+$("lpReset").onclick = () => powerSet({ reset_counts: true }, $("lpSwMsg"), "The counts start again.");
+$("batSave").onclick = () => powerSet({ bat_pin: Number($("batPin").value), bat_ratio: Number($("batRatio").value) }, $("batMsg"), "Saved. Restart the board to use it.");
+$("batRule").onclick = async () => {
+  let st; try { st = await api("/api/state"); } catch (e) {}
+  if (!st || !st.rules) return say($("batMsg"), false, "The board did not answer.");
+  if (!(inputs && inputs.inputs.some(x => x.name === "battery_pct"))) return say($("batMsg"), false, "The board has no battery input yet. Save the pin and restart the board first.");
+  const cur = st.rules.rules;
+  if (cur.some(r => r.name === "battery_low")) return say($("batMsg"), true, "The rule battery_low is already there. Change it on the Ideas tab.");
+  if (cur.length >= 16) return say($("batMsg"), false, "The board holds 16 rules. Remove one on the Ideas tab first.");
+  const rule = { name: "battery_low", when: [{ q: "in:battery_pct", op: "<", p: 15 }], for_ms: 0, hold_ms: 0, on: "start", gpio: -1, level: 1,
+    text: "The battery is low. Charge it soon.", notify: true, photo: false, cooldown_s: 43200, count: false, urgent: true };
+  const r = await api("/api/rules", cur.concat([rule]));
+  dirty = false;
+  say($("batMsg"), r.ok, r.ok ? "Added the rule battery_low: an urgent alert below 15 %, at most one each 12 hours." : "Not added: " + (r.error || "no answer"));
+};
 
 function usFlag() {
   let s = '<svg viewBox="0 0 760 400" role="img" aria-label="Flag of the United States"><rect width="760" height="400" fill="var(--card)"/><g fill="var(--ink)">';

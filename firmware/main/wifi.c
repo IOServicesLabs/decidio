@@ -35,7 +35,16 @@ static struct {
 static esp_timer_handle_t s_retry, s_ap_off;
 static TaskHandle_t s_dns;
 
-const char *rt_wifi_host(void) { return s.host; }
+// the board's name, decidio-<last 4 hex of the MAC>; known before Wi-Fi starts (a low-power wake sends with it)
+const char *rt_wifi_host(void)
+{
+    if (!s.host[0]) {
+        uint8_t mac[6] = { 0 };
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        snprintf(s.host, sizeof(s.host), "decidio-%02x%02x", mac[4], mac[5]);
+    }
+    return s.host;
+}
 bool rt_wifi_online(void) { return s.online; }
 bool rt_wifi_setup_open(void) { return s.ap_on; }
 int rt_wifi_channel(void) { return s.online ? s.channel : 0; }
@@ -125,6 +134,10 @@ static void join(void)
                                  .pmf_cfg = { .capable = true } } };
     strlcpy((char *)c.sta.ssid, s.ssid, sizeof(c.sta.ssid));
     strlcpy((char *)c.sta.password, s.pass, sizeof(c.sta.password));
+    if (s.fails == 0 && rt_power_fast_ap(c.sta.bssid, &c.sta.channel)) {   // low power: straight to last time's router
+        c.sta.bssid_set = true;
+        c.sta.scan_method = WIFI_FAST_SCAN;
+    }
     esp_wifi_set_config(WIFI_IF_STA, &c);
     esp_wifi_connect();
 }
@@ -165,6 +178,9 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         snprintf(s.ip, sizeof(s.ip), IPSTR, IP2STR(&e->ip_info.ip));
         wifi_ap_record_t ap;
         s.channel = esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.primary : 0;
+        if (s.channel) {
+            rt_power_joined(ap.bssid, s.channel);
+        }
         s.online = s.ever_online = true;
         s.fails = s.reason = 0;
         if (!s.sntp) {                                       // the clock, for rules with hours and for alert times
@@ -185,9 +201,7 @@ esp_err_t rt_wifi_driver(void)
     if (s.driver) {
         return ESP_OK;
     }
-    uint8_t mac[6] = { 0 };
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    snprintf(s.host, sizeof(s.host), "decidio-%02x%02x", mac[4], mac[5]);
+    rt_wifi_host();
     ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "netif");
     esp_err_t err = esp_event_loop_create_default();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {

@@ -4,8 +4,16 @@
 // At most 20 messages a minute leave the board; what does not fit is dropped and counted. A message is text. A photo
 // (the 96x96 frame the model saw, doubled to 192x192) is attached only for rules that ask for one, and only to Telegram.
 //
+// In a group of boards (home.c), one board sends the alerts of all of them. The other boards give it their alerts, and
+// it gets the photo of such an alert from that board's page (/api/frame.jpg, with the group's token).
+//
+// Grouping: an alert goes out at once, then for "alert_window" seconds (60; 0 = never group) the alerts that follow
+// are kept, and at the end of that time they go out together as one message ("the same rule on 2 boards, 3 times").
+// After that message the next window starts, so that a storm of alerts makes one message a window. An urgent rule and
+// the daily summary are never kept back.
+//
 // Settings (store.c): tg_token, tg_chat | hook_url, hook_hdr ("Name: value"), hook_fmt (json | text) |
-//                     mqtt_url (mqtt:// or mqtts://), mqtt_user, mqtt_pass
+//                     mqtt_url (mqtt:// or mqtts://), mqtt_user, mqtt_pass | alert_window (seconds)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,21 +30,33 @@
 #include "freertos/task.h"
 #include "img_converters.h"
 #include "mqtt_client.h"
+#include "cJSON.h"
 #include "rt.h"
 
 #define PER_MINUTE 20
 #define TEXT_LEN 200
+#define MAX_FOLD 10             // different alerts kept in one window; more are only counted
+#define BODY_LEN 520            // the longest message text (a grouped message)
 
 static const char *TAG = "alert";
 
 typedef struct {
-    bool on, photo, test;
+    bool on, photo, test, urgent;
+    bool remote;                // from another board of the group (host, label, ip are that board's)
+    bool grouped;               // the grouped message: its text is in s_body
     float p;
     time_t t;
     char rule[RT_ID_LEN], text[TEXT_LEN], dest[10];
+    char host[20], label[24], ip[16];
     rt_alert_result_t *out;
     SemaphoreHandle_t done;
 } job_t;
+
+typedef struct {                // alerts kept back in this window: one line for each rule and change
+    char rule[RT_ID_LEN], text[72], where[64];
+    bool on;
+    uint16_t times;
+} fold_t;
 
 typedef struct {
     uint32_t sent, failed;
@@ -48,12 +68,19 @@ static struct {
 } s_cfg;
 static QueueHandle_t s_q;
 static volatile bool s_reload = true;
+static volatile bool s_busy;    // the task has a job in hand (rt_alert_idle)
 static tally_t s_tg, s_hook, s_mq;
-static uint32_t s_dropped;
+static uint32_t s_dropped, s_handed, s_folded;
 static esp_mqtt_client_handle_t s_mqtt;
 static volatile bool s_mqtt_up;
 static int64_t s_sent_us[PER_MINUTE];
 static int s_sent_i;
+static int s_window_s = 60;
+static int64_t s_win_end;       // 0: no window open
+static fold_t *s_fold;          // MAX_FOLD, in external memory
+static int s_fold_n;
+static uint32_t s_fold_more;
+static char *s_body, *s_msg, *s_esc, *s_post;   // message buffers of the alert task, in external memory
 
 static int esc(char *dst, size_t cap, const char *src)      // JSON string contents
 {
@@ -179,32 +206,80 @@ uint8_t *rt_snapshot_jpg(size_t *len)
     return ok ? jpg : NULL;
 }
 
+#define MSG_LEN (BODY_LEN + 100)
+#define ESC_LEN (2 * MSG_LEN)
+#define POST_LEN (2 * ESC_LEN + 400)
+
+// the photo of an alert from another board: its frame now, from its page (the group's token opens it)
+static uint8_t *peer_jpg(const char *ip, size_t *len)
+{
+    char url[48];
+    snprintf(url, sizeof(url), "http://%s/api/frame.jpg", ip);
+    const esp_http_client_config_t c = { .url = url, .timeout_ms = 4000, .buffer_size = 1024 };
+    esp_http_client_handle_t h = esp_http_client_init(&c);
+    if (!h) {
+        return NULL;
+    }
+    esp_http_client_set_header(h, "X-Decidio-Group", rt_home_token());
+    uint8_t *jpg = NULL;
+    *len = 0;
+    if (esp_http_client_open(h, 0) == ESP_OK) {
+        const int64_t cl = esp_http_client_fetch_headers(h);
+        if (esp_http_client_get_status_code(h) == 200 && cl > 0 && cl < 65536) {
+            jpg = heap_caps_malloc((size_t)cl, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            int got = 0, n;
+            while (jpg && got < cl && (n = esp_http_client_read(h, (char *)jpg + got, (int)cl - got)) > 0) {
+                got += n;
+            }
+            if (jpg && got == cl) {
+                *len = (size_t)cl;
+            } else {
+                free(jpg);
+                jpg = NULL;
+            }
+        }
+    }
+    esp_http_client_close(h);
+    esp_http_client_cleanup(h);
+    return jpg;
+}
+
 static void line(char *msg, size_t cap, const job_t *j)
 {
-    snprintf(msg, cap, "%s\n%s %s, %d%% - %s", j->text, j->rule, j->on ? "on" : "off", (int)(j->p * 100 + 0.5f),
-             rt_wifi_host());
+    if (j->grouped) {
+        snprintf(msg, cap, "%s", s_body);
+        return;
+    }
+    if (j->p >= 0 && j->p <= 1) {
+        snprintf(msg, cap, "%s\n%s %s, %d%% - %s", j->text, j->rule, j->on ? "on" : "off", (int)(j->p * 100 + 0.5f),
+                 j->label);
+    } else {                    // a rule on an input: its value, not a share of 1
+        snprintf(msg, cap, "%s\n%s %s, %.4g - %s", j->text, j->rule, j->on ? "on" : "off", j->p, j->label);
+    }
 }
 
 static void telegram(const job_t *j, rt_alert_result_t *r)
 {
-    static char url[160], body[520], msg[300], e[400];
-    line(msg, sizeof(msg), j);
+    static char url[160];
+    char *body = s_post, *msg = s_msg, *e = s_esc;
+    line(msg, MSG_LEN, j);
     uint8_t *jpg = NULL;
     size_t jl = 0;
     if (j->photo) {
-        jpg = rt_snapshot_jpg(&jl);
+        jpg = j->remote ? peer_jpg(j->ip, &jl) : rt_snapshot_jpg(&jl);
     }
     if (!jpg) {
         snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendMessage", s_cfg.tg_token);
-        esc(e, sizeof(e), msg);
-        snprintf(body, sizeof(body), "{\"chat_id\":\"%s\",\"text\":\"%s\"}", s_cfg.tg_chat, e);
+        esc(e, ESC_LEN, msg);
+        snprintf(body, POST_LEN, "{\"chat_id\":\"%s\",\"text\":\"%s\"}", s_cfg.tg_chat, e);
         http_post(url, "application/json", NULL, body, r);
         return;
     }
     // multipart: chat_id, caption, photo
     static const char *B = "decidioBoundary7c1f";
-    static char head[640], tail[40];
-    const int hl = snprintf(head, sizeof(head),
+    static char tail[40];
+    char *head = s_post;
+    const int hl = snprintf(head, POST_LEN,
                             "--%s\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n%s\r\n"
                             "--%s\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n%s\r\n"
                             "--%s\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"frame.jpg\"\r\n"
@@ -241,16 +316,17 @@ static void telegram(const job_t *j, rt_alert_result_t *r)
 
 static void webhook(const job_t *j, rt_alert_result_t *r)
 {
-    static char body[1100], msg[300], e[400];
-    line(msg, sizeof(msg), j);
+    char *body = s_post, *msg = s_msg, *e = s_esc;
+    line(msg, MSG_LEN, j);
     if (!strcmp(s_cfg.hook_fmt, "text")) {
         http_post(s_cfg.hook_url, "text/plain; charset=utf-8", s_cfg.hook_hdr, msg, r);
         return;
     }
-    esc(e, sizeof(e), msg);
-    snprintf(body, sizeof(body),
-             "{\"text\":\"%s\",\"content\":\"%s\",\"device\":\"%s\",\"event\":\"%s\",\"state\":\"%s\",\"p\":%.3f,\"time\":%lld}",
-             e, e, rt_wifi_host(), j->rule, j->on ? "on" : "off", j->p, (long long)j->t);
+    esc(e, ESC_LEN, msg);
+    snprintf(body, POST_LEN,
+             "{\"text\":\"%s\",\"content\":\"%s\",\"device\":\"%s\",\"room\":\"%s\",\"event\":\"%s\",\"state\":\"%s\","
+             "\"p\":%.3f,\"time\":%lld}",
+             e, e, j->host, j->label, j->rule, j->on ? "on" : "off", j->p, (long long)j->t);
     http_post(s_cfg.hook_url, "application/json", s_cfg.hook_hdr, body, r);
 }
 
@@ -297,7 +373,8 @@ static void mqtt_setup(void)
 
 static void mqtt_send(const job_t *j, rt_alert_result_t *r)
 {
-    static char topic[96], body[420], e[300];
+    static char topic[96];
+    char *body = s_post, *e = s_esc;
     const int64_t t0 = esp_timer_get_time();
     memset(r, 0, sizeof(*r));
     for (int i = 0; i < 50 && !s_mqtt_up && j->test; i++) {        // a test waits up to 5 s for the first connection
@@ -306,10 +383,10 @@ static void mqtt_send(const job_t *j, rt_alert_result_t *r)
     if (!s_mqtt || !s_mqtt_up) {
         snprintf(r->detail, sizeof(r->detail), "not connected to the broker");
     } else {
-        esc(e, sizeof(e), j->text);
-        snprintf(topic, sizeof(topic), "decidio/%s/event/%s", rt_wifi_host(), j->rule);
-        snprintf(body, sizeof(body), "{\"state\":\"%s\",\"p\":%.3f,\"text\":\"%s\",\"time\":%lld}", j->on ? "on" : "off",
-                 j->p, e, (long long)j->t);
+        esc(e, ESC_LEN, j->grouped ? s_body : j->text);
+        snprintf(topic, sizeof(topic), "decidio/%s/event/%s", j->host, j->rule);   // the board that saw it
+        snprintf(body, POST_LEN, "{\"state\":\"%s\",\"p\":%.3f,\"text\":\"%s\",\"room\":\"%s\",\"time\":%lld}",
+                 j->on ? "on" : "off", j->p, e, j->label, (long long)j->t);
         r->ok = esp_mqtt_client_publish(s_mqtt, topic, body, 0, 1, 0) >= 0;
         if (!r->ok) {
             snprintf(r->detail, sizeof(r->detail), "publish failed");
@@ -330,8 +407,11 @@ static void load(void)
     rt_store_get("mqtt_url", s_cfg.mqtt_url, sizeof(s_cfg.mqtt_url));
     rt_store_get("mqtt_user", s_cfg.mqtt_user, sizeof(s_cfg.mqtt_user));
     rt_store_get("mqtt_pass", s_cfg.mqtt_pass, sizeof(s_cfg.mqtt_pass));
+    char w[8];
+    const int ws = rt_store_get("alert_window", w, sizeof(w)) && w[0] ? atoi(w) : 60;
+    s_window_s = ws < 0 ? 0 : ws > 3600 ? 3600 : ws;
     snprintf(now, sizeof(now), "%s|%s|%s", s_cfg.mqtt_url, s_cfg.mqtt_user, s_cfg.mqtt_pass);
-    if (strcmp(old, now) || (s_cfg.mqtt_url[0] && !s_mqtt)) {
+    if (rt_wifi_online() && (strcmp(old, now) || (s_cfg.mqtt_url[0] && !s_mqtt))) {
         mqtt_setup();
     }
 }
@@ -380,20 +460,156 @@ static bool budget(void)
     return true;
 }
 
+static void send_all(const job_t *j, rt_alert_result_t *r)
+{
+    if (!budget()) {
+        s_dropped++;
+        return;
+    }
+    if (s_cfg.tg_token[0] && s_cfg.tg_chat[0]) {
+        deliver(j, telegram, &s_tg, r);
+    }
+    if (s_cfg.hook_url[0]) {
+        deliver(j, webhook, &s_hook, r);
+    }
+    if (s_cfg.mqtt_url[0]) {
+        deliver(j, mqtt_send, &s_mq, r);
+    }
+}
+
+static void add_where(char *where, size_t cap, const char *label)
+{
+    const size_t n = strlen(label);
+    for (const char *s = where; (s = strstr(s, label)); s += n) {           // already in the list
+        if ((s == where || (s >= where + 2 && s[-2] == ',')) && (s[n] == 0 || s[n] == ',')) {
+            return;
+        }
+    }
+    if (strlen(where) + n + 3 < cap) {
+        if (where[0]) {
+            strcat(where, ", ");
+        }
+        strcat(where, label);
+    }
+}
+
+// keep an alert for the grouped message
+static void fold(const job_t *j)
+{
+    s_folded++;
+    for (int i = 0; i < s_fold_n; i++) {
+        fold_t *f = &s_fold[i];
+        if (f->on == j->on && !strcmp(f->rule, j->rule)) {
+            f->times++;
+            add_where(f->where, sizeof(f->where), j->label);
+            return;
+        }
+    }
+    if (s_fold_n >= MAX_FOLD) {
+        s_fold_more++;
+        return;
+    }
+    fold_t *f = &s_fold[s_fold_n++];
+    memset(f, 0, sizeof(*f));
+    strlcpy(f->rule, j->rule, sizeof(f->rule));
+    strlcpy(f->text, j->text, sizeof(f->text));
+    f->on = j->on;
+    f->times = 1;
+    add_where(f->where, sizeof(f->where), j->label);
+}
+
+// the end of a window: the alerts kept in it go out as one message, and the next window starts; else no window
+static void flush(int64_t now)
+{
+    if (!s_win_end || now < s_win_end) {
+        return;
+    }
+    if (!s_fold_n && !s_fold_more) {
+        s_win_end = 0;
+        return;
+    }
+    static job_t g;
+    memset(&g, 0, sizeof(g));
+    g.grouped = g.on = true;
+    g.p = 1;
+    g.t = time(NULL) > 1600000000 ? time(NULL) : 0;
+    strlcpy(g.rule, "grouped", sizeof(g.rule));
+    strlcpy(g.host, rt_wifi_host(), sizeof(g.host));
+    strlcpy(g.label, rt_home_label(), sizeof(g.label));
+    int n = snprintf(s_body, BODY_LEN, "More alerts in the last %d s:", s_window_s);
+    for (int i = 0; i < s_fold_n && n < BODY_LEN; i++) {
+        const fold_t *f = &s_fold[i];
+        n += snprintf(s_body + n, BODY_LEN - n, "\n- %s%s (%s)", f->text[0] ? f->text : f->rule,
+                      f->text[0] || f->on ? "" : " ended", f->where);
+        if (f->times > 1 && n < BODY_LEN) {
+            n += snprintf(s_body + n, BODY_LEN - n, ", %u times", f->times);
+        }
+    }
+    if (s_fold_more && n < BODY_LEN) {
+        snprintf(s_body + n, BODY_LEN - n, "\n- and %lu more", (unsigned long)s_fold_more);
+    }
+    s_fold_n = 0;
+    s_fold_more = 0;
+    s_win_end = now + (int64_t)s_window_s * 1000000;
+    if (rt_wifi_online()) {
+        rt_alert_result_t r = { 0 };
+        send_all(&g, &r);
+    }
+}
+
+// a rule of this board fired: is another board of the group the one that sends the alerts? Then give it this one.
+static bool handoff(const job_t *j)
+{
+    char ip[16], host[20];
+    if (rt_home_sender(ip, sizeof(ip), host, sizeof(host))) {
+        rt_power_note_sender(ip, host);
+    } else if (!rt_power_sender(ip, sizeof(ip), host, sizeof(host))) {   // low power: the sender of an earlier wake
+        return false;
+    }
+    cJSON *a = cJSON_CreateObject();
+    if (!a) {
+        return false;
+    }
+    cJSON_AddStringToObject(a, "r", j->rule);
+    cJSON_AddStringToObject(a, "t", j->text);
+    cJSON_AddNumberToObject(a, "on", j->on);
+    cJSON_AddNumberToObject(a, "p", (int)(j->p * 1000 + 0.5f) / 1000.0);
+    cJSON_AddNumberToObject(a, "ph", j->photo);
+    cJSON_AddNumberToObject(a, "u", j->urgent);
+    cJSON_AddNumberToObject(a, "tm", (double)j->t);
+    const bool ok = rt_home_handoff(a, ip);
+    cJSON_Delete(a);
+    if (ok) {
+        s_handed++;
+    } else {
+        rt_power_note_sender("", "");
+        ESP_LOGW(TAG, "%s: %s did not answer; sending it from this board", j->rule, host);
+    }
+    return ok;
+}
+
 static void alert_task(void *arg)
 {
     static job_t j;
     for (;;) {
-        if (xQueueReceive(s_q, &j, pdMS_TO_TICKS(1000)) != pdTRUE) {
-            if (s_reload && rt_wifi_online()) {
-                s_reload = false;
-                load();
+        const bool got = xQueueReceive(s_q, &j, pdMS_TO_TICKS(1000)) == pdTRUE;
+        s_busy = got;
+        if (got && !j.test && !rt_wifi_online() && rt_power_on() && rt_alert_ready()) {
+            rt_power_need_net();                           // low power: Wi-Fi joins for this alert
+            for (int i = 0; i < 200 && !rt_wifi_online(); i++) {
+                vTaskDelay(pdMS_TO_TICKS(100));
             }
-            continue;
+            if (rt_wifi_online()) {
+                vTaskDelay(pdMS_TO_TICKS(300));            // the address and the clock settle
+            }
         }
-        if (s_reload) {
+        if (s_reload && (got || rt_wifi_online())) {
             s_reload = false;
             load();
+        }
+        flush(esp_timer_get_time());
+        if (!got) {
+            continue;
         }
         rt_alert_result_t r = { 0 };
         if (!rt_wifi_online()) {
@@ -424,18 +640,16 @@ static void alert_task(void *arg)
                     snprintf(r.detail, sizeof(r.detail), "broker not set");
                 }
             }
-        } else if (!budget()) {
-            s_dropped++;
+        } else if (!j.remote && !(j.photo && rt_power_on()) && handoff(&j)) {
+            // (low power: a board that sleeps cannot give the sender its photo, so it sends photo alerts itself)
+            // the group's sender has it
+        } else if (!j.urgent && s_window_s > 0 && s_win_end && !rt_power_on()) {
+            fold(&j);                                      // goes out with the others at the end of the window
         } else {
-            if (s_cfg.tg_token[0] && s_cfg.tg_chat[0]) {
-                deliver(&j, telegram, &s_tg, &r);
+            if (!j.urgent && s_window_s > 0 && !rt_power_on()) {   // low power: the board is not awake for a window
+                s_win_end = esp_timer_get_time() + (int64_t)s_window_s * 1000000;
             }
-            if (s_cfg.hook_url[0]) {
-                deliver(&j, webhook, &s_hook, &r);
-            }
-            if (s_cfg.mqtt_url[0]) {
-                deliver(&j, mqtt_send, &s_mq, &r);
-            }
+            send_all(&j, &r);
         }
         if (j.out) {
             *j.out = r;
@@ -443,6 +657,7 @@ static void alert_task(void *arg)
         if (j.done) {
             xSemaphoreGive(j.done);
         }
+        s_busy = false;
     }
 }
 
@@ -451,6 +666,17 @@ void rt_alert_start(void)
     if (s_q) {
         return;
     }
+    const size_t caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    s_fold = heap_caps_calloc_prefer(MAX_FOLD, sizeof(fold_t), 2, caps, MALLOC_CAP_8BIT);
+    s_body = heap_caps_malloc_prefer(BODY_LEN + MSG_LEN + ESC_LEN + POST_LEN, 2, caps, MALLOC_CAP_8BIT);
+    if (!s_fold || !s_body) {
+        ESP_LOGE(TAG, "no memory for the alert buffers");
+        return;
+    }
+    s_msg = s_body + BODY_LEN;
+    s_esc = s_msg + MSG_LEN;
+    s_post = s_esc + ESC_LEN;
+    load();                                               // the destinations are known before Wi-Fi joins (low power)
     s_q = xQueueCreate(8, sizeof(job_t));
     if (!s_q || xTaskCreatePinnedToCore(alert_task, "alert", 7168, NULL, 2, NULL, 0) != pdPASS) {
         ESP_LOGE(TAG, "no memory for the alert task");
@@ -464,7 +690,7 @@ void rt_alert_reload(void)
 }
 
 // from the decision task: never waits
-void rt_alert_event(const char *rule, const char *text, bool on, float p, bool photo)
+void rt_alert_event(const char *rule, const char *text, bool on, float p, bool photo, bool urgent)
 {
     if (!s_q) {
         return;
@@ -474,12 +700,95 @@ void rt_alert_event(const char *rule, const char *text, bool on, float p, bool p
     j.on = on;
     j.p = p;
     j.photo = photo;
+    j.urgent = urgent;
     j.t = time(NULL) > 1600000000 ? time(NULL) : 0;
     strlcpy(j.rule, rule, sizeof(j.rule));
     strlcpy(j.text, text && text[0] ? text : rule, sizeof(j.text));
+    strlcpy(j.host, rt_wifi_host(), sizeof(j.host));
+    strlcpy(j.label, rt_home_label(), sizeof(j.label));
     if (xQueueSend(s_q, &j, 0) != pdTRUE) {
         s_dropped++;
+    } else if (rt_power_on() && rt_alert_ready()) {
+        rt_power_need_net();
     }
+}
+
+bool rt_alert_idle(void)
+{
+    return !s_q || (!s_busy && uxQueueMessagesWaiting(s_q) == 0 && s_fold_n == 0 && s_fold_more == 0);
+}
+
+bool rt_alert_ready(void)
+{
+    return (s_cfg.tg_token[0] && s_cfg.tg_chat[0]) || s_cfg.hook_url[0] || s_cfg.mqtt_url[0];
+}
+
+// from the home task: never waits
+bool rt_alert_from_peer(const char *host, const char *label, const char *ip, const char *rule, const char *text, bool on,
+                        float p, bool photo, bool urgent, long long t)
+{
+    if (!s_q || !rt_alert_ready()) {
+        return false;
+    }
+    static job_t j;                                       // one caller
+    memset(&j, 0, sizeof(j));
+    j.remote = true;
+    j.on = on;
+    j.p = p;
+    j.photo = photo;
+    j.urgent = urgent;
+    j.t = t > 1600000000 ? (time_t)t : 0;
+    strlcpy(j.rule, rule, sizeof(j.rule));
+    strlcpy(j.text, text[0] ? text : rule, sizeof(j.text));
+    strlcpy(j.host, host, sizeof(j.host));
+    strlcpy(j.label, label, sizeof(j.label));
+    strlcpy(j.ip, ip, sizeof(j.ip));
+    return xQueueSend(s_q, &j, 0) == pdTRUE;
+}
+
+// from the web page: write this board's alert settings on each other board of the group. [{"host","ok"},...]
+int rt_alert_share(char *dst, size_t cap)
+{
+    static const char *KEYS[] = { "tg_token", "tg_chat", "hook_url", "hook_hdr", "hook_fmt", "mqtt_url", "mqtt_user",
+                                  "mqtt_pass", "alert_window" };
+    char ips[8][16], hosts[8][20];
+    const int m = rt_home_members(ips, hosts, 8);
+    cJSON *b = cJSON_CreateObject();
+    char *v = malloc(200);
+    for (size_t i = 0; b && v && i < sizeof(KEYS) / sizeof(KEYS[0]); i++) {
+        if (!rt_store_get(KEYS[i], v, 200)) {
+            v[0] = 0;
+        }
+        if (!strcmp(KEYS[i], "alert_window") && !v[0]) {
+            continue;                                      // not set here: leave theirs
+        }
+        cJSON_AddStringToObject(b, KEYS[i], v);
+    }
+    free(v);
+    char *body = b ? cJSON_PrintUnformatted(b) : NULL;
+    cJSON_Delete(b);
+    int n = snprintf(dst, cap, "[");
+    for (int k = 0; body && k < m; k++) {
+        char url[48];
+        snprintf(url, sizeof(url), "http://%s/api/alerts", ips[k]);
+        const esp_http_client_config_t c = { .url = url, .method = HTTP_METHOD_POST, .timeout_ms = 6000, .buffer_size = 512 };
+        esp_http_client_handle_t h = esp_http_client_init(&c);
+        int status = 0;
+        if (h) {
+            esp_http_client_set_header(h, "X-Decidio-Group", rt_home_token());
+            esp_http_client_set_header(h, "Content-Type", "application/json");
+            esp_http_client_set_post_field(h, body, strlen(body));
+            if (esp_http_client_perform(h) == ESP_OK) {
+                status = esp_http_client_get_status_code(h);
+            }
+            esp_http_client_cleanup(h);
+        }
+        n += snprintf(dst + n, n < (int)cap ? cap - n : 0, "%s{\"host\":\"%s\",\"ok\":%s,\"status\":%d}", k ? "," : "", hosts[k],
+                      status == 200 ? "true" : "false", status);
+    }
+    free(body);
+    n += snprintf(dst + n, n < (int)cap ? cap - n : 0, "]");
+    return n < (int)cap ? n : -1;
 }
 
 // from the web page or the console: waits for the answer (up to 30 s)
@@ -505,6 +814,8 @@ bool rt_alert_test(const char *dest, rt_alert_result_t *out)
     strlcpy(j->dest, dest, sizeof(j->dest));
     strlcpy(j->rule, "test", sizeof(j->rule));
     strlcpy(j->text, "Test alert from your decidio board", sizeof(j->text));
+    strlcpy(j->host, rt_wifi_host(), sizeof(j->host));
+    strlcpy(j->label, rt_home_label(), sizeof(j->label));
     const bool queued = xQueueSend(s_q, j, pdMS_TO_TICKS(500)) == pdTRUE;
     free(j);
     if (queued && xSemaphoreTake(done, pdMS_TO_TICKS(30000)) == pdTRUE) {
@@ -521,10 +832,12 @@ int rt_alert_json(char *dst, size_t cap)
     return snprintf(dst, cap,
                     "{\"telegram\":{\"set\":%s,\"chat\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
                     "\"webhook\":{\"set\":%s,\"format\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
-                    "\"mqtt\":{\"set\":%s,\"connected\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},\"dropped\":%lu}",
+                    "\"mqtt\":{\"set\":%s,\"connected\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},\"dropped\":%lu,"
+                    "\"window\":%d,\"handed\":%lu,\"grouped\":%lu}",
                     s_cfg.tg_token[0] && s_cfg.tg_chat[0] ? "true" : "false", s_cfg.tg_chat, (unsigned long)s_tg.sent,
                     (unsigned long)s_tg.failed, s_tg.last, s_cfg.hook_url[0] ? "true" : "false",
                     s_cfg.hook_fmt[0] ? s_cfg.hook_fmt : "json", (unsigned long)s_hook.sent, (unsigned long)s_hook.failed,
                     s_hook.last, s_cfg.mqtt_url[0] ? "true" : "false", s_mqtt_up ? "true" : "false",
-                    (unsigned long)s_mq.sent, (unsigned long)s_mq.failed, s_mq.last, (unsigned long)s_dropped);
+                    (unsigned long)s_mq.sent, (unsigned long)s_mq.failed, s_mq.last, (unsigned long)s_dropped, s_window_s,
+                    (unsigned long)s_handed, (unsigned long)s_folded);
 }

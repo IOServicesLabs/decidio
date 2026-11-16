@@ -5,7 +5,8 @@
 //   GET  /api/info       board, model, Wi-Fi, alert counters, memory
 //   GET  /api/scan       networks in range (setup)
 //   POST /api/wifi       {"ssid","pass"} | {"forget":true}
-//   POST /api/alerts     any of tg_token tg_chat hook_url hook_hdr hook_fmt mqtt_url mqtt_user mqtt_pass
+//   POST /api/alerts     any of tg_token tg_chat hook_url hook_hdr hook_fmt mqtt_url mqtt_user mqtt_pass alert_window
+//   POST /api/alerts/share  write this board's alert settings on the other boards of the group -> {"boards":[...]}
 //   POST /api/test       {"dest":"telegram|webhook|mqtt|probe"} -> {"ok","status","ms","detail"}
 //   GET  /api/state      the last decision, the rules and whether each is on, the radio score
 //   POST /api/rules      a JSON array of rules (rules.c) | {"reset":true}: back to the model package's own
@@ -21,9 +22,13 @@
 //   GET  /api/devices    Smart Life / Tuya devices on this board's list, and the ones heard on the network
 //   POST /api/devices    {"name","id","key","ip","ver":"3.5","dp":1,"slot"} | {"slot":n,"delete":true}
 //   POST /api/devices/test  {"slot":n,"do":"on|off|status"} -> {"ok","ms","detail","answer"}
+//   POST /api/devices/try   {"id","ip","ver","key","dp","do":"on|off|status|blink"}: a heard device, not saved
 //   GET  /api/home       this board's room, and the other boards heard (their rooms and which rules are on)
 //   POST /api/home       {"room":"Kitchen"} | {"group":"secret"}
 //   POST /api/home/add   {"host","pass"}: give another board this board's group secret
+//   GET  /api/power      low-power mode: its settings, what the board does now, and the counts for the battery estimate
+//   POST /api/power      {"on","wakes","from","to","look","checkin","pir","gap","usb_sleep","mah","i_sleep","i_awake",
+//                        "i_wifi","bat_pin","bat_ratio"} (any of them) | {"stay":true|false} | {"reset_counts":true}
 //   ANY  /api/via/<board>/api/...   the same request passed on to another board of the group
 // A request from another board of the group carries the group's token (X-Decidio-Group) instead of the password.
 #include <stdio.h>
@@ -67,14 +72,19 @@ static void load_auth(void)
 
 static bool allowed(httpd_req_t *req)
 {
+    char got[120];
+    const bool peer = httpd_req_get_hdr_value_str(req, "X-Decidio-Group", got, sizeof(got)) == ESP_OK &&
+                      rt_home_token_ok(got);
+    if (!peer && (req->method != HTTP_GET || !strcmp(req->uri, "/"))) {
+        rt_power_touch();                                // low power: a person opened the page or changed something
+    }
     if (!s_auth[0]) {
         return true;
     }
-    char got[120];
     if (httpd_req_get_hdr_value_str(req, "Authorization", got, sizeof(got)) == ESP_OK && !strcmp(got, s_auth)) {
         return true;
     }
-    if (httpd_req_get_hdr_value_str(req, "X-Decidio-Group", got, sizeof(got)) == ESP_OK && rt_home_token_ok(got)) {
+    if (peer) {
         return true;                                     // another board of the group
     }
     httpd_resp_set_status(req, "401 Unauthorized");
@@ -252,8 +262,8 @@ static esp_err_t h_wifi(httpd_req_t *req)
 static esp_err_t h_alerts(httpd_req_t *req)
 {
     static const char *KEYS[] = { "tg_token", "tg_chat", "hook_url", "hook_hdr", "hook_fmt", "mqtt_url", "mqtt_user",
-                                  "mqtt_pass" };
-    static const uint8_t MAXLEN[] = { 63, 23, 199, 159, 7, 127, 47, 63 };
+                                  "mqtt_pass", "alert_window" };
+    static const uint8_t MAXLEN[] = { 63, 23, 199, 159, 7, 127, 47, 63, 4 };
     if (!allowed(req)) {
         return ESP_OK;
     }
@@ -266,15 +276,38 @@ static esp_err_t h_alerts(httpd_req_t *req)
         if (!v) {
             continue;                                      // not sent: left as it is
         }
-        if (strlen(v) > MAXLEN[i] || strpbrk(v, "\"\\\r\n")) {
+        if (strlen(v) > MAXLEN[i] || strpbrk(v, "\"\\\r\n") ||
+            (!strcmp(KEYS[i], "alert_window") && (strspn(v, "0123456789") != strlen(v) || atoi(v) > 3600))) {
             cJSON_Delete(j);
-            return bad(req, KEYS[i]);
+            return bad(req, !strcmp(KEYS[i], "alert_window") ? "alert_window: 0 to 3600 seconds" : KEYS[i]);
         }
         rt_store_set(KEYS[i], v);
     }
     cJSON_Delete(j);
     rt_alert_reload();
     return json(req, "{\"ok\":true}");
+}
+
+// write this board's alert settings on the other boards of the group
+static esp_err_t h_alerts_share(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    char *b = malloc(900);
+    if (!b) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no memory");
+    }
+    const int n = snprintf(b, 900, "{\"boards\":");
+    const int k = rt_alert_share(b + n, 900 - n - 2);
+    if (k < 0) {
+        strcpy(b + n, "[]}");
+    } else {
+        strcpy(b + n + k, "}");
+    }
+    const esp_err_t e = json(req, b);
+    free(b);
+    return e;
 }
 
 static esp_err_t h_test(httpd_req_t *req)
@@ -569,11 +602,11 @@ static esp_err_t h_devices(httpd_req_t *req)
     if (!allowed(req)) {
         return ESP_OK;
     }
-    char *b = heap_caps_malloc_prefer(4096, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
+    char *b = heap_caps_malloc_prefer(6144, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
     if (!b) {
         return httpd_resp_send_500(req);
     }
-    const esp_err_t err = rt_dev_json(b, 4096) < 0 ? httpd_resp_send_500(req) : json(req, b);
+    const esp_err_t err = rt_dev_json(b, 6144) < 0 ? httpd_resp_send_500(req) : json(req, b);
     free(b);
     return err;
 }
@@ -624,6 +657,34 @@ static esp_err_t h_device_test(httpd_req_t *req)
     return err;
 }
 
+static esp_err_t h_device_try(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    cJSON *j = body(req);
+    if (!j) {
+        return bad(req, "expected JSON");
+    }
+    char *b = malloc(1400);
+    if (!b) {
+        cJSON_Delete(j);
+        return httpd_resp_send_500(req);
+    }
+    char *dps = b + 400;
+    rt_alert_result_t r;
+    rt_dev_try(j, &r, dps, 900);
+    cJSON_Delete(j);
+    const bool obj = dps[0] == '{' && !strpbrk(dps, "\r\n");
+    snprintf(b, 400, "{\"ok\":%s,\"ms\":%d,\"detail\":\"%s\",\"answer\":", r.ok ? "true" : "false", r.ms, r.detail);
+    const size_t n = strlen(b);
+    memmove(b + n, obj ? dps : "null", obj ? strlen(dps) + 1 : 5);
+    strcat(b, "}");
+    const esp_err_t err = json(req, b);
+    free(b);
+    return err;
+}
+
 // ---- the other boards (home.c) ----
 
 static esp_err_t h_home(httpd_req_t *req)
@@ -638,6 +699,35 @@ static esp_err_t h_home(httpd_req_t *req)
     const esp_err_t err = rt_home_json(b, 8192) < 0 ? httpd_resp_send_500(req) : json(req, b);
     free(b);
     return err;
+}
+
+static esp_err_t h_power(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    char *b = heap_caps_malloc_prefer(2048, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
+    if (!b) {
+        return httpd_resp_send_500(req);
+    }
+    const esp_err_t err = rt_power_json(b, 2048) < 0 ? httpd_resp_send_500(req) : json(req, b);
+    free(b);
+    return err;
+}
+
+static esp_err_t h_power_set(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    cJSON *j = body(req);
+    if (!j) {
+        return bad(req, "expected JSON");
+    }
+    char why[100] = "not saved";
+    const esp_err_t e = rt_power_set(j, why, sizeof(why));
+    cJSON_Delete(j);
+    return e == ESP_OK ? json(req, "{\"ok\":true}") : bad(req, why);
 }
 
 static esp_err_t h_home_set(httpd_req_t *req)
@@ -953,6 +1043,7 @@ void rt_web_start(void)
         { .uri = "/api/scan", .method = HTTP_GET, .handler = h_scan },
         { .uri = "/api/wifi", .method = HTTP_POST, .handler = h_wifi },
         { .uri = "/api/alerts", .method = HTTP_POST, .handler = h_alerts },
+        { .uri = "/api/alerts/share", .method = HTTP_POST, .handler = h_alerts_share },
         { .uri = "/api/test", .method = HTTP_POST, .handler = h_test },
         { .uri = "/api/state", .method = HTTP_GET, .handler = h_state },
         { .uri = "/api/rules", .method = HTTP_POST, .handler = h_rules },
@@ -968,6 +1059,7 @@ void rt_web_start(void)
         { .uri = "/api/devices", .method = HTTP_GET, .handler = h_devices },
         { .uri = "/api/devices", .method = HTTP_POST, .handler = h_device_set },
         { .uri = "/api/devices/test", .method = HTTP_POST, .handler = h_device_test },
+        { .uri = "/api/devices/try", .method = HTTP_POST, .handler = h_device_try },
         { .uri = "/api/home", .method = HTTP_GET, .handler = h_home },
         { .uri = "/api/home", .method = HTTP_POST, .handler = h_home_set },
         { .uri = "/api/home/add", .method = HTTP_POST, .handler = h_home_add },
@@ -978,6 +1070,8 @@ void rt_web_start(void)
         { .uri = "/api/eye.bin", .method = HTTP_GET, .handler = h_eye_bin },
         { .uri = "/api/eye/sharp.bin", .method = HTTP_GET, .handler = h_eye_sharp },
         { .uri = "/api/board", .method = HTTP_POST, .handler = h_board },
+        { .uri = "/api/power", .method = HTTP_GET, .handler = h_power },
+        { .uri = "/api/power", .method = HTTP_POST, .handler = h_power_set },
         { .uri = "/api/via/*", .method = HTTP_GET, .handler = h_via },
         { .uri = "/api/via/*", .method = HTTP_POST, .handler = h_via },
     };

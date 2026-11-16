@@ -320,6 +320,12 @@ float rt_radio_motion(void)
     if (!s_want) {
         return -1;
     }
+    if (rt_power_on()) {                                     // low power: Wi-Fi is on only to send, not to sense
+        if (s_motion) {
+            motion_enable(false);
+        }
+        return -1;
+    }
     const int64_t now = esp_timer_get_time();
     if (now - s_mot_calc_us < 250000) {
         return s_mot_score;
