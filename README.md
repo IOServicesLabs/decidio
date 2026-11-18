@@ -5,6 +5,11 @@ the microphone. It answers fixed questions approximately nine times each second,
 room?" or "Was that a knock?". Rules on the board read the answers. A rule can set a pin, write a line to USB, or
 send an alert to Telegram, a webhook or MQTT.
 
+![The Live tab of the page of the board. A bar for each answer of the model changes approximately nine times each second.](docs/images/live-tab.gif)
+
+The picture shows the Live tab of the page of the board. Each line is one question. The bar shows the answer of the
+model and how sure the model is, from 0 to 1.
+
 There are 63 ready-made ideas. Each idea is the base model and a set of rules. You install an idea, connect the
 board to Wi-Fi, and adjust the idea on the web page of the board. You do not train a model for these ideas.
 
@@ -276,6 +281,14 @@ form, then click **Save page password**.
 After you change a rule on the Ideas tab, click **Save changes**. The board then saves the rule, and the change
 applies immediately. When you add an idea, the board saves it immediately. You do not install again. The board can
 operate 16 rules, thus more than one idea can operate at the same time.
+
+The Ideas tab shows the rules that operate now, a form for your own rule, and the list of ideas:
+
+![The Ideas tab. It shows the rule person_moving with its threshold, its times and its alert text, the form "Add your own rule", and the start of the list of ideas.](docs/images/ideas-tab.png)
+
+The Power tab shows the plan for low power and the estimate of the battery life:
+
+![The Power tab. It shows the plan with 96 wakes each day and a 2000 mAh battery, and the estimate "about 34 days on one charge".](docs/images/power-tab.png)
 
 ## The eye that sees movement
 
