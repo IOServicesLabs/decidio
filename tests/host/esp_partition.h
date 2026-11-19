@@ -10,4 +10,5 @@ typedef int esp_partition_mmap_handle_t;
 const esp_partition_t *esp_partition_find_first(int type, int subtype, const char *label);
 esp_err_t esp_partition_mmap(const esp_partition_t *p, size_t off, size_t size, int memory, const void **out,
                              esp_partition_mmap_handle_t *h);
+esp_err_t esp_partition_read(const esp_partition_t *p, size_t off, void *dst, size_t size);
 void esp_partition_munmap(esp_partition_mmap_handle_t h);
