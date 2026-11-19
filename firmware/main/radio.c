@@ -315,7 +315,9 @@ float rt_radio_motion(void)
     if (!s_want_read) {
         char v[4];
         s_want_read = true;
-        s_want = rt_store_get("radio_motion", v, sizeof(v));
+        // "1" on, "0" off. Not set: on when a rule tests the score, so an idea that uses the radio operates
+        // immediately after the install.
+        s_want = rt_store_get("radio_motion", v, sizeof(v)) ? v[0] == '1' : rt_actions_uses_radio();
     }
     if (!s_want) {
         return -1;
@@ -357,7 +359,7 @@ void rt_radio_motion_want(bool on)
 {
     s_want_read = true;
     s_want = on;
-    rt_store_set("radio_motion", on ? "1" : NULL);
+    rt_store_set("radio_motion", on ? "1" : "0");
     if (!on) {
         motion_enable(false);
     }

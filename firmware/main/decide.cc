@@ -98,12 +98,10 @@ extern "C" esp_err_t rt_decide_init(void)
     // grow if the estimate was short
     size_t want = (size_t)(m.arena_kb > 16 ? m.arena_kb : 64) * 1024;
     for (int attempt = 0; attempt < 4; attempt++, want = want * 3 / 2) {
-        uint8_t *arena = (uint8_t *)heap_caps_aligned_alloc(16, want, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-        bool internal = arena != nullptr && heap_caps_get_free_size(MALLOC_CAP_INTERNAL) > 110 * 1024;
-        if (arena && !internal) {
-            heap_caps_free(arena);
-            arena = nullptr;
-        }
+        // ask first, do not try: a trial block that is given back again still shows as the lowest free memory
+        uint8_t *arena = heap_caps_get_free_size(MALLOC_CAP_INTERNAL) > want + 110 * 1024
+                             ? (uint8_t *)heap_caps_aligned_alloc(16, want, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) : nullptr;
+        const bool internal = arena != nullptr;
         if (!arena) {
             arena = (uint8_t *)heap_caps_aligned_alloc(16, want, MALLOC_CAP_SPIRAM);
         }

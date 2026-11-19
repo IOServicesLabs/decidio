@@ -345,8 +345,9 @@ def main(argv=None):
     s = add("install", cmd_install, "write the firmware and one ready-made idea to a board (to see the ideas, run: decidio builds)")
     s.add_argument("idea")
     s.add_argument("--port", required=True)
-    s.add_argument("--board", choices=["xiao_sense", "s3cam"],
-                   help="do not ask the board for its sensors. xiao_sense: the board has a microphone. s3cam: the board has no microphone")
+    s.add_argument("--board", choices=["xiao_sense", "s3cam", "mic_only", "plain"],
+                   help="do not ask the board for its sensors. xiao_sense: the board has a microphone. s3cam: the board has no microphone. "
+                        "mic_only: a XIAO ESP32S3 Sense that must not use its camera. plain: a board with no camera and no microphone")
     s.add_argument("--baud", type=int, default=921600)
     s.add_argument("--keep-firmware", action="store_true", help="only replace the model package and its rules")
     s = add("wifi", cmd_wifi, "connect the board to Wi-Fi through USB, or show its address")

@@ -3,11 +3,11 @@ file(GLOB SENSOR_SRCS "sensors/*.c")
 list(FILTER SENSOR_SRCS EXCLUDE REGEX "/_[^/]*$")
 idf_component_register(
     SRCS "main.c" "model.c" "board.c" "camera.c" "audio.c" "mel.c" "ego.c" "decide.cc" "actions.c" "console.c" "radio.c"
-         "rules.c" "store.c" "wifi.c" "web.c" "alert.c" "devices.c" "home.c" "inputs.c" "eye.cc" "power.c" ${SENSOR_SRCS}
+         "rules.c" "store.c" "wifi.c" "web.c" "alert.c" "devices.c" "home.c" "push.c" "inputs.c" "eye.cc" "power.c" ${SENSOR_SRCS}
     INCLUDE_DIRS "."
     PRIV_REQUIRES esp_driver_i2s esp_driver_gpio esp_driver_uart esp_driver_usb_serial_jtag esp_partition
                   esp_timer esp_psram nvs_flash json mbedtls esp_rom esp_wifi esp_netif esp_event
-                  esp_http_server esp_http_client esp-tls mqtt lwip app_update esp_driver_tsens spi_flash vfs esp_adc
+                  esp_http_server esp_http_client esp-tls mqtt lwip app_update bootloader_support esp_app_format esp_driver_tsens spi_flash vfs esp_adc
     EMBED_TXTFILES "www/index.html" "recipes.json"
     WHOLE_ARCHIVE                 # a sensor file registers itself; nothing else names it, so the linker must keep it
 )

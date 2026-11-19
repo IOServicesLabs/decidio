@@ -7,6 +7,7 @@
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,6 +17,7 @@
 
 static const char *TAG = "decidio";
 static bool s_model_ok, s_cam_ok, s_mic_ok;
+static bool s_blind;                // the model looks but the board has no camera: its picture input gets a black frame
 static bool s_silent;               // the model listens but the board has no microphone: its sound input gets silence
 static int s_clip = 16000, s_sr = 16000;
 
@@ -87,7 +89,9 @@ static void decide_task(void *arg)
     const rt_model_t *m = &g_model;
     float *mel = NULL;
     if (s_model_ok && m->has_audio) {
-        mel = heap_caps_malloc(sizeof(float) * m->n_frames * m->n_mels, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+        // external memory first: this copy is read once for each decision, and the internal memory is short on a
+        // board with a microphone
+        mel = heap_caps_malloc_prefer(sizeof(float) * m->n_frames * m->n_mels, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
         configASSERT(mel);
     }
     if (mel && s_silent) {                                // what the microphone path makes of no sound at all
@@ -99,7 +103,12 @@ static void decide_task(void *arg)
             memcpy(mel + (size_t)f * m->n_mels, mel, sizeof(float) * m->n_mels);
         }
     }
-    const bool listen = m->has_audio && !s_silent;
+    uint8_t *blank = NULL;
+    if (s_blind) {
+        blank = heap_caps_calloc_prefer(1, (size_t)RT_CAM * RT_CAM * (m->colors == 3 ? 3 : 1), 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
+        configASSERT(blank);
+    }
+    const bool listen = m->has_audio && !s_silent, look = m->has_image && !s_blind;
     static rt_result_t r;
     uint32_t last = 0, runs = 0, cseq = 0;
     int64_t last_print = esp_timer_get_time(), last_collect = 0, last_tick = 0;
@@ -132,8 +141,8 @@ static void decide_task(void *arg)
                 continue;
             }
         }
-        const uint8_t *cur = NULL, *prev = NULL;
-        if (m->has_image) {
+        const uint8_t *cur = blank, *prev = blank;
+        if (look) {
             uint32_t fseq = 0;
             if (!rt_cam_acquire(&cur, &prev, &fseq)) {
                 vTaskDelay(1);
@@ -150,7 +159,7 @@ static void decide_task(void *arg)
         }
         last = seq;
         rt_decide_inputs(cur, prev, mel);
-        if (m->has_image) {
+        if (look) {
             rt_cam_release();
         }
         if (rt_decide_invoke(&r) != ESP_OK) {
@@ -167,6 +176,14 @@ static void decide_task(void *arg)
             runs = 0;
         }
     }
+}
+
+// A restart by software does not reset the camera interface of the chip. Stop it first, so that it does not continue
+// to run when the next start does not use the camera (a package for a board without a camera).
+void rt_restart(void)
+{
+    rt_cam_off();
+    esp_restart();
 }
 
 void app_main(void)
@@ -201,8 +218,22 @@ void app_main(void)
             s_model_ok = false;
         }
     }
+    if (s_model_ok && m->has_image && !g_board.has_cam) {
+        if (m->has_audio && g_board.has_mic) {
+            s_blind = true;       // the sound questions still answer: the picture input gets a black frame
+            printf("{\"note\":\"no camera: the model's picture input gets a black frame and its picture questions are off\"}\n");
+        } else {
+            printf("{\"note\":\"no camera and no microphone: the model is off; rules on the radio, inputs and other boards run\"}\n");
+            s_model_ok = false;
+        }
+    }
+    if (!s_model_ok) {
+        for (int i = 0; i < m->n_q; i++) {
+            m->q[i].na = true;    // the page then offers only what this board can do
+        }
+    }
     // camera: as the model wants it, or RGB for collecting when there is no model (the PC converts to gray if needed)
-    const bool want_img = !s_model_ok || m->has_image;
+    const bool want_img = (!s_model_ok || m->has_image) && !s_blind;
     if (want_img) {
         s_cam_ok = g_board.has_cam && rt_cam_start(s_model_ok ? m->colors : 3, s_model_ok && m->motion ? m->lag : 4,
                                                    s_model_ok ? m->frame_ms : 50) == ESP_OK;
@@ -234,6 +265,12 @@ void app_main(void)
     rt_power_start();         // low power: the rules' states from the last wake; decisions wait for the camera's light
     xTaskCreatePinnedToCore(decide_task, "decide", 8192, NULL, 3, NULL, 1);
     if (rt_power_net_now()) {
+        // Not before 2.5 s after the start. A board with a camera gets there later than that. A board without one got
+        // here in less than 1 s, and then an ESP32-S3-CAM could not log in to a router that it received at -48 dBm
+        // (measured on one board; the cause is not known).
+        while (esp_timer_get_time() < 2500000) {
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
         rt_wifi_boot();       // after the model has its memory: join the network or open the setup access point
     }
 }

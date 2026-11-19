@@ -204,6 +204,7 @@ const DESTS = { telegram: "Telegram", webhook: "Webhook", mqtt: "MQTT" };
 
 const BOARD_EXTRA = {
   "s3cam-lcd": "ESP32-S3-CAM with a display connector (camera, no microphone)",
+  plain: "ESP32-S3 board with no camera and no microphone",
   unknown: "Unknown board",
 };
 

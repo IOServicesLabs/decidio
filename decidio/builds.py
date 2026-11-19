@@ -23,9 +23,20 @@ PKG = Path(__file__).resolve().parent
 OUT = PKG.parent / "installer" / "builds"
 # The firmware is the same on every board; what differs is the base model a build carries. "Board" here is the kind of
 # board: one with a microphone gets `general`, one without gets `general-cam` (smaller and faster: no sound branch).
-BOARD_BASE = {"xiao_sense": "general", "s3cam": "general-cam"}
+BOARD_BASE = {"xiao_sense": "general", "s3cam": "general-cam", "mic_only": "general", "plain": "general-cam"}
 BOARD_NAME = {"xiao_sense": "Camera and microphone (Seeed XIAO ESP32S3 Sense)",
-              "s3cam": "Camera, no microphone (ESP32-S3-CAM, ESP32-S3-EYE pinout)"}
+              "s3cam": "Camera, no microphone (ESP32-S3-CAM, ESP32-S3-EYE pinout)",
+              "mic_only": "Microphone, camera not used (Seeed XIAO ESP32S3 Sense)",
+              "plain": "No camera, no microphone (other ESP32-S3 board, 8 MB flash or more)"}
+# Kinds of board without a camera: what their package tells the firmware ("hw" in the header; firmware/main/model.c).
+# The firmware then does not look for a camera. mic_only runs the sound questions of its base model. plain runs no
+# model: its rules use the radio, the pins, add-on sensors and the other boards.
+NO_CAMERA = {"mic_only": {"camera": False}, "plain": {"camera": False, "profile": "plain"}}
+
+
+def _sound_questions(base: str) -> set[str]:
+    h = json.loads((PKG / "base" / base / "out" / "model_header.json").read_text(encoding="utf-8"))
+    return {q["id"] for q in h["questions"] if q.get("m") == "a"}
 
 
 def have_firmware() -> bool:
@@ -34,7 +45,18 @@ def have_firmware() -> bool:
 
 def boards_for(recipe: dict) -> list[str]:
     """Kinds of board whose base model answers everything the recipe asks."""
-    return [b for b, base in BOARD_BASE.items() if base in recipe.get("models", []) and have_firmware()]
+    if not have_firmware():
+        return []
+    out = []
+    for b, base in BOARD_BASE.items():
+        if b in NO_CAMERA:
+            sound = _sound_questions(base) if b == "mic_only" and base in recipe.get("models", []) else set()
+            if recipe["status"] != "teach" and all(n == "radio" or (n.startswith("in:") and not n.startswith("in:eye_")) or n in sound
+                                                   for n in recipe.get("needs", [])):
+                out.append(b)
+        elif base in recipe.get("models", []):
+            out.append(b)
+    return out
 
 
 def board_from_sensors(sensors: dict | None) -> str | None:
@@ -57,6 +79,8 @@ def package_for(recipe: dict, board: str) -> bytes:
     h = json.loads((out / "model_header.json").read_text(encoding="utf-8"))
     h["actions"] = recipe["rules"]
     h["recipe"] = recipe["id"]
+    if board in NO_CAMERA:
+        h["hw"] = NO_CAMERA[board]
     return dcd.package(h, (out / "model_int8.tflite").read_bytes())
 
 

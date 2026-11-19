@@ -304,6 +304,19 @@ bool rt_actions_restore(const rt_actions_keep_t *k)
     return ok;
 }
 
+// does a rule test the radio movement score? No lock: the radio asks from inside rt_actions_update
+bool rt_actions_uses_radio(void)
+{
+    for (int i = 0; i < s_n; i++) {
+        for (int k = 0; k < s_act[i].n_c; k++) {
+            if (s_act[i].c[k].q == RT_Q_RADIO) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool rt_actions_uses_dev(int slot)
 {
     bool used = false;

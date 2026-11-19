@@ -26,8 +26,45 @@
 - The sensor file `sensors/battery.c`: the battery voltage through two resistors, as the inputs `battery_v` and
   `battery_pct`. The Power tab can add a low-battery alert.
 
+- Groups: the group password. It is optional. **Add to the group** makes a group with a random secret and no
+  password. If you save a group password, the board gives it to the other boards of the group, and it is then also
+  the password of the page of each board in the group (user name `decidio`). A page password is not necessary.
+- Page: the card **Alerts of the group** on the Group tab. It shows the alert destinations and the rules of each
+  board. You can set **send an alert**, **with a photo** and **urgent** for each rule of each board there.
+- Page: the tab **Group**. It shows each board of the group on one page: the camera picture, the strongest answers
+  and the rules. **Open** shows all the tabs of that board. Each board of the group can show this page.
+- Groups: the firmware update of the group (`push.c`). When a board gets new firmware from its page, it restarts and
+  then sends that firmware to each other board of the group that has a different build. The button **Give the
+  firmware of this board to the other boards** and the route `POST /api/home/push` do the same by hand.
+- Groups: the radio link. A board in a group also sends its broadcasts with ESP-NOW, directly to the boards in radio
+  range. A board reads such a message immediately. The broadcasts through the router continue.
+- `/api/home`: the fields `fw`, `id` (the build), `radio` and `push`, and `id`, `direct`, `rssi` and `lead` for each
+  board. `/api/info`: the field `group_pass`. `/api/home`: the field `open` (a group with no password), and
+  `POST /api/home` with `{"start":true}`.
+- Camera: **Turn the picture** on the Live tab, for a board that is not upright (90, 180 or 270 degrees). The
+  route `POST /api/camera` with `{"rotate":90}` does the same, and `/api/info` has the field `cam_rot`. A turn of 180
+  degrees also turns the picture of the eye. A quarter turn turns only the frame of the model, the camera picture
+  on the page and the photo of an alert.
+- Boards without a camera: the types `mic_only` (a XIAO ESP32S3 Sense that does not use its camera) and `plain` (an
+  ESP32-S3 board with no camera and no microphone), on the installer website and in `decidio install --board`. The
+  package tells the firmware that there is no camera (`"hw"` in the package header). The firmware then does not look
+  for one. With a microphone, the sound questions answer and the picture input gets a black frame. With no
+  microphone, the model does not run, and the rules use the Wi-Fi movement score, pins, sensors and other boards.
+- Firmware: the board profile `plain`.
+- README: pictures of the Live, Ideas and Power tabs.
+
 ### Changed
 
+- The Wi-Fi movement score starts by itself when a rule uses it and you did not set it to off on the Radio tab.
+- The firmware stops the camera interface of the chip before a restart. Before, the interface continued to run
+  after a restart by software. A start that did not use the camera then could not use Wi-Fi.
+- Wi-Fi starts 2.5 seconds after the start of the board or later.
+- Two sound buffers moved from the internal memory to the PSRAM. A board with a microphone has approximately 16 KB
+  more free internal memory. The decision rate did not change (9.2 decisions each second on the XIAO).
+- The model loader no longer takes a block of internal memory to see if it fits. It reads the free size first.
+
+- README: the install from a browser is now procedure A. The install with commands is procedure B.
+- The label **Group secret** on the Boards tab is now **Group password**.
 - `/api/devices`: each heard device has the fields `name` and `named`.
 - Alerts: the text shows the room of the board (or its name if it has no room). The webhook JSON has the field
   `room`. `device` and the MQTT topic name the board that saw the event.

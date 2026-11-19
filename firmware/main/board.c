@@ -27,6 +27,9 @@ static const rt_board_t PROFILES[] = {
       .card_bus = RT_CARD_MMC, .card_pin = { 39, 38, 40, -1 } },
     // ESP32-S3-CAM boards with a display connector (camera on other pins): no microphone, no card
     { .name = "s3cam-lcd", .cam_map = 2, .orient = -1, .mic_clk = -1, .mic_din = -1, .uart_console = true },
+    // Any other ESP32-S3 board: no camera, no microphone. Rules use the radio, the pins, add-on sensors and the
+    // other boards. Never found by the search: the model package names it (rt_model_hw), or `board plain`.
+    { .name = "plain", .cam_map = -1, .orient = -1, .mic_clk = -1, .mic_din = -1 },
 };
 #define N_PROFILES ((int)(sizeof(PROFILES) / sizeof(PROFILES[0])))
 
@@ -64,10 +67,18 @@ void rt_board_detect(void)
         order[n++] = keep;
     } else {
         for (int i = 0; i < N_PROFILES; i++) {
-            if (PROFILES[i].uart_console == uart) {
+            if (PROFILES[i].uart_console == uart && PROFILES[i].cam_map >= 0) {
                 order[n++] = i;
             }
         }
+    }
+    // the model package says that this board has no camera: do not look for one (that drives pins)
+    bool no_cam = false;
+    char want[16] = "";
+    rt_model_hw(&no_cam, want, sizeof(want));
+    if (no_cam) {
+        n = 0;
+        rt_cam_quiet();
     }
     int found = -1;
     for (int k = 0; k < n && found < 0; k++) {
@@ -75,13 +86,16 @@ void rt_board_detect(void)
             found = order[k];
         }
     }
-    int use = found >= 0 ? found : keep;
+    int use = found >= 0 ? found : no_cam && by_name(want) >= 0 ? by_name(want) : keep;
     if (use < 0) {
         use = by_name(uart ? "s3cam" : "xiao_sense");     // no camera answered: the family's first profile, without one
     }
     g_board = PROFILES[use];
     g_board.has_cam = found >= 0;
     g_board.saved = keep >= 0;
+    if (g_board.cam_map < 0) {
+        g_board.uart_console = uart;                     // an unknown board: keep the pins of its USB-serial chip free
+    }
     if (g_board.mic_clk >= 0) {
         s_mic_spread = rt_audio_probe(g_board.mic_clk, g_board.mic_din);
         g_board.has_mic = s_mic_spread >= 4;

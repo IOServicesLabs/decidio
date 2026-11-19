@@ -128,6 +128,43 @@ int rt_model_default_rules(rt_action_t *out, int max)
     return n;
 }
 
+// The package can say that the board has no camera ("hw":{"camera":false}) and name its profile
+// ("hw":{"profile":"plain"}): the installer writes this for a board type without a camera. Read before the board is
+// examined, so that no camera pin is driven on such a board. False: the package says nothing, or there is none.
+bool rt_model_hw(bool *no_camera, char *profile, size_t cap)
+{
+    *no_camera = false;
+    profile[0] = 0;
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, 0x40, "model");
+    uint8_t head[16];
+    uint32_t jl;
+    if (!part || esp_partition_read(part, 0, head, sizeof(head)) != ESP_OK || memcmp(head, "DCD1", 4) != 0) {
+        return false;
+    }
+    memcpy(&jl, head + 4, 4);
+    if (jl == 0 || jl > 64 * 1024 || 16 + jl > part->size) {
+        return false;
+    }
+    char *json = malloc(jl + 1);
+    if (!json) {
+        return false;
+    }
+    bool said = false;
+    if (esp_partition_read(part, 16, json, jl) == ESP_OK) {
+        json[jl] = 0;
+        cJSON *root = cJSON_Parse(json);
+        const cJSON *hw = cJSON_GetObjectItemCaseSensitive(root, "hw");
+        if (cJSON_IsObject(hw)) {
+            said = true;
+            *no_camera = cJSON_IsFalse(cJSON_GetObjectItemCaseSensitive(hw, "camera"));
+            jstr(hw, "profile", profile, cap);
+        }
+        cJSON_Delete(root);
+    }
+    free(json);
+    return said;
+}
+
 esp_err_t rt_model_load(void)
 {
     memset(&g_model, 0, sizeof(g_model));

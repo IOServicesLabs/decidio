@@ -73,14 +73,18 @@ def test_every_idea_packages(board):
     tfl = (builds.PKG / "base" / builds.BOARD_BASE[board] / "out" / "model_int8.tflite").read_bytes()
     n = 0
     for e in CAT:
-        if e["status"] == "teach" or builds.BOARD_BASE[board] not in e["models"]:
+        if e["status"] == "teach" or board not in builds.boards_for(e):
             continue
         h, model = dcd.unpack(builds.package_for(e, board))
         assert model == tfl and h["actions"] == e["rules"] and h["questions"] == base["questions"]
+        assert h.get("hw") == builds.NO_CAMERA.get(board)
+        if board in builds.NO_CAMERA:                       # nothing that needs the camera
+            sound = {q["id"] for q in h["questions"] if q.get("m") == "a"} if board == "mic_only" else set()
+            assert all(c["q"] in sound or c["q"] == "radio_motion" or c["q"][:3] == "in:" for r in h["actions"] for c in r["when"]), e["id"]
         ids = {q["id"] for q in h["questions"]}
         assert all(c["q"] in ids or c["q"] == "radio_motion" or c["q"][3:] in boardrules.INPUTS for r in h["actions"] for c in r["when"])
         n += 1
-    assert n >= (57 if board == "xiao_sense" else 30)
+    assert n >= {"xiao_sense": 57, "s3cam": 30, "mic_only": 8, "plain": 3}[board]
     teach = next(e for e in CAT if e["status"] == "teach")
     with pytest.raises(SystemExit, match="record"):
         builds.package_for(teach, board)

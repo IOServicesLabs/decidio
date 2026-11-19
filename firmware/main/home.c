@@ -21,6 +21,11 @@
 // A newer "seq" is required within one "boot", so a recorded packet cannot be played again later in the same run.
 // The secret itself crosses the network once, in clear, when a board is added from another board's page: like the
 // rest of the page, this trusts your own network.
+//
+// A board in a group also sends each broadcast straight to the boards near it with ESP-NOW (a Wi-Fi frame from radio to
+// radio, not through the router). It arrives in a few milliseconds, so a rule that depends on another board follows it
+// almost at once. The same broadcast still goes through the router for boards that are too far apart. Only signed
+// ESP-NOW frames are believed: a radio that is not on your network can send them.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,12 +33,16 @@
 
 #include "cJSON.h"
 #include "esp_heap_caps.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_now.h"
 #include "esp_random.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
+#include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lwip/sockets.h"
@@ -46,7 +55,12 @@
 #define FRESH_US (9 * 1000000LL)
 
 typedef struct {
-    char host[20], room[24], ip[16], fw[12];
+    char host[20], room[24], ip[16], fw[12], id[10];
+    int64_t now_us;             // last heard straight from its radio (ESP-NOW), 0 = never
+    int8_t rssi;                // the signal of that frame
+    int64_t first_us;           // when the first copy of its last broadcast came, and was it the copy from the radio
+    bool first_now;
+    int16_t lead_ms;            // how long the copy from the radio came before the copy through the router (< 0: after)
     bool member;                // same group, and its signature checked out
     bool alerts;                // it has somewhere to send alerts
     uint32_t boot, seq;
@@ -61,6 +75,7 @@ static const char *TAG = "home";
 static peer_t *s_peer;
 static SemaphoreHandle_t s_lock;
 static char s_room[24], s_secret[40], s_token[33];
+static bool s_open;                // the group has no password: its secret is a random key that a board made
 static uint8_t s_key[32];
 static bool s_grouped;
 static uint32_t s_boot, s_seq;
@@ -70,6 +85,16 @@ static SemaphoreHandle_t s_ack;   // given when the sender says it has our alert
 static volatile uint32_t s_ack_want;
 static uint32_t s_aid;
 static char *s_out, *s_in;        // 1300 and 1400 bytes, in external memory
+static char s_fwid[10];           // which firmware build this is (the start of its SHA-256)
+
+typedef struct {
+    uint16_t len;
+    int8_t rssi;
+    char *msg;
+} now_rx_t;
+static QueueHandle_t s_nowq;      // frames from the radios of other boards, for the home task
+static bool s_now;
+static uint32_t s_now_tx, s_now_rx;
 
 static void tag_of(const char *json, size_t n, char out[17])
 {
@@ -105,6 +130,8 @@ void rt_home_reload(void)
     rt_store_get("room", s_room, sizeof(s_room));
     s_grouped = rt_store_get("group", s_secret, sizeof(s_secret)) && s_secret[0];
     s_token[0] = 0;
+    char open[4] = "";
+    s_open = s_grouped && rt_store_get("group_open", open, sizeof(open)) && open[0] == '1';
     if (s_grouped) {
         char seed[64];
         const int n = snprintf(seed, sizeof(seed), "decidio-group:%s", s_secret);
@@ -118,6 +145,15 @@ void rt_home_reload(void)
     }
     xSemaphoreGive(s_lock);
     s_changed = true;
+    rt_web_auth_reload();                                  // the group password opens the page
+}
+
+const char *rt_home_fwid(void)
+{
+    if (!s_fwid[0]) {
+        esp_app_get_elf_sha256(s_fwid, 9);                // 8 hex characters
+    }
+    return s_fwid;
 }
 
 bool rt_home_token_ok(const char *tok)
@@ -133,6 +169,26 @@ const char *rt_home_token(void)
 const char *rt_home_secret(void)
 {
     return s_grouped ? s_secret : "";
+}
+
+bool rt_home_open(void)
+{
+    return s_grouped && s_open;
+}
+
+// start a group that has no password, when this board is not in a group: the secret is a random key
+void rt_home_begin(void)
+{
+    if (s_grouped) {
+        return;
+    }
+    char key[33];
+    for (int i = 0; i < 4; i++) {
+        snprintf(key + 8 * i, 9, "%08lx", (unsigned long)esp_random());
+    }
+    rt_store_set("group", key);
+    rt_store_set("group_open", "1");
+    rt_home_reload();
 }
 
 static peer_t *find(const char *host)                      // by name, or by room
@@ -275,6 +331,27 @@ int rt_home_members(char ips[][16], char hosts[][20], int max)
     return n;
 }
 
+// the other members heard lately, with the firmware build each one runs ("" = an older firmware that does not say)
+int rt_home_fleet(char ips[][16], char hosts[][20], char ids[][10], int max)
+{
+    int n = 0;
+    if (!s_lock || !s_peer || !s_grouped) {
+        return 0;
+    }
+    const int64_t now = esp_timer_get_time();
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    for (int i = 0; i < MAX_PEER && n < max; i++) {
+        if (s_peer[i].host[0] && s_peer[i].member && now - s_peer[i].seen_us < FRESH_US) {
+            snprintf(ips[n], 16, "%s", s_peer[i].ip);
+            snprintf(hosts[n], 20, "%s", s_peer[i].host);
+            snprintf(ids[n], 10, "%s", s_peer[i].id);
+            n++;
+        }
+    }
+    xSemaphoreGive(s_lock);
+    return n;
+}
+
 void rt_home_changed(void)
 {
     s_changed = true;
@@ -352,7 +429,8 @@ static void alert_msg(const cJSON *j, const char *kind, const char *from)
     }
 }
 
-static void heard(char *msg, int n, const char *from)
+// from: the address it came from on the network, or NULL for a frame straight from a radio (ESP-NOW)
+static void heard(char *msg, int n, const char *from, int rssi)
 {
     msg[n] = 0;
     if (n < 20 || strncmp(msg, "decidio1 ", 9)) {
@@ -369,10 +447,13 @@ static void heard(char *msg, int n, const char *from)
         tag_of(js, strlen(js), want);
         signed_ok = !strcmp(want, tag);
     }
+    if (!from && !signed_ok) {
+        return;                                            // any radio in range can send a frame: only the group's count
+    }
     cJSON *j = cJSON_Parse(js);
     const cJSON *kind = cJSON_GetObjectItemCaseSensitive(j, "k");
     if (cJSON_IsString(kind)) {
-        if (signed_ok) {
+        if (signed_ok && from) {
             alert_msg(j, kind->valuestring, from);
         }
         cJSON_Delete(j);
@@ -407,14 +488,38 @@ static void heard(char *msg, int n, const char *from)
         snprintf(p->host, sizeof(p->host), "%s", h->valuestring);
     }
     const uint32_t b = (uint32_t)boot->valuedouble, q = (uint32_t)seq->valuedouble;
+    const cJSON *jip = cJSON_GetObjectItemCaseSensitive(j, "ip");
+    struct in_addr a4;
+    const char *ip = from ? from
+                     : cJSON_IsString(jip) && strlen(jip->valuestring) < 16 && inet_aton(jip->valuestring, &a4) ? jip->valuestring : NULL;
+    if (!from) {
+        p->now_us = esp_timer_get_time();                  // the same broadcast also comes through the router
+        p->rssi = (int8_t)rssi;
+        s_now_rx++;
+    }
+    if (b == p->boot && q == p->seq) {                     // the second copy of a broadcast
+        const int64_t d = (esp_timer_get_time() - p->first_us) / 1000;
+        if (from && p->first_now) {
+            p->lead_ms = (int16_t)(d > 30000 ? 30000 : d);
+            snprintf(p->ip, sizeof(p->ip), "%s", from);    // the copy through the router gives the address
+        } else if (!from && !p->first_now) {
+            p->lead_ms = (int16_t)(d > 30000 ? -30000 : -d);
+        }
+    }
     if (!(b == p->boot && q <= p->seq)) {                  // else: an old packet again
         p->boot = b;
         p->seq = q;
         p->seen_us = esp_timer_get_time();
+        p->first_us = p->seen_us;
+        p->first_now = !from;
         p->member = signed_ok;
         const cJSON *al = cJSON_GetObjectItemCaseSensitive(j, "al");
         p->alerts = signed_ok && cJSON_IsNumber(al) && al->valueint;
-        snprintf(p->ip, sizeof(p->ip), "%s", from);
+        const cJSON *id = cJSON_GetObjectItemCaseSensitive(j, "id");
+        snprintf(p->id, sizeof(p->id), "%s", cJSON_IsString(id) && word(id->valuestring, 9) ? id->valuestring : "");
+        if (ip) {
+            snprintf(p->ip, sizeof(p->ip), "%s", ip);
+        }
         snprintf(p->room, sizeof(p->room), "%s", cJSON_IsString(room) && word(room->valuestring, 23) ? room->valuestring : "");
         snprintf(p->fw, sizeof(p->fw), "%s", cJSON_IsString(fw) && word(fw->valuestring, 11) ? fw->valuestring : "");
         p->n = 0;
@@ -438,10 +543,19 @@ static void heard(char *msg, int n, const char *from)
 static void say(void)
 {
     char *msg = s_out;
-    char js[1200];
+    char js[1200], own[16] = "";
+    struct sockaddr_in to = { .sin_family = AF_INET, .sin_port = htons(HOME_PORT), .sin_addr.s_addr = htonl(INADDR_BROADCAST) };
+    esp_netif_ip_info_t ip;
+    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (sta && esp_netif_get_ip_info(sta, &ip) == ESP_OK && ip.ip.addr) {
+        to.sin_addr.s_addr = ip.ip.addr | ~ip.netmask.addr;   // this network's broadcast address
+        const struct in_addr me = { .s_addr = ip.ip.addr };
+        inet_ntoa_r(me, own, sizeof(own));
+    }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    int n = snprintf(js, sizeof(js), "{\"h\":\"%s\",\"room\":\"%s\",\"fw\":\"%s\",\"boot\":%lu,\"seq\":%lu,\"al\":%d,\"rules\":",
-                     rt_wifi_host(), s_room, RT_VERSION, (unsigned long)s_boot, (unsigned long)++s_seq,
+    int n = snprintf(js, sizeof(js),
+                     "{\"h\":\"%s\",\"room\":\"%s\",\"ip\":\"%s\",\"fw\":\"%s\",\"id\":\"%s\",\"boot\":%lu,\"seq\":%lu,\"al\":%d,\"rules\":",
+                     rt_wifi_host(), s_room, own, RT_VERSION, rt_home_fwid(), (unsigned long)s_boot, (unsigned long)++s_seq,
                      s_grouped && rt_alert_ready() && !rt_power_on());
     const bool grouped = s_grouped;
     xSemaphoreGive(s_lock);
@@ -457,16 +571,53 @@ static void say(void)
         tag_of(js, n, tag);
     }
     const int len = snprintf(msg, 1300, "decidio1 %s %s", tag, js);
-    struct sockaddr_in to = { .sin_family = AF_INET, .sin_port = htons(HOME_PORT), .sin_addr.s_addr = htonl(INADDR_BROADCAST) };
-    esp_netif_ip_info_t ip;
-    esp_netif_t *sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    if (sta && esp_netif_get_ip_info(sta, &ip) == ESP_OK && ip.ip.addr) {
-        to.sin_addr.s_addr = ip.ip.addr | ~ip.netmask.addr;   // this network's broadcast address
+    if (grouped && s_now && len <= ESP_NOW_MAX_DATA_LEN_V2) {  // first: straight to the radios of the boards in range
+        static const uint8_t all[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+        if (esp_now_send(all, (const uint8_t *)msg, len) == ESP_OK) {
+            s_now_tx++;
+        }
     }
     if (sendto(s_fd, msg, len, 0, (const struct sockaddr *)&to, sizeof(to)) < 0) {
         close(s_fd);                                       // the network went away: open it again next time
         s_fd = -1;
     }
+}
+
+// Wi-Fi task: a frame from the radio of another board. The home task reads it.
+static void now_rx(const esp_now_recv_info_t *info, const uint8_t *data, int len)
+{
+    if (len < 20 || len > 1399 || !s_nowq) {
+        return;
+    }
+    now_rx_t m = { .len = (uint16_t)len, .rssi = info->rx_ctrl ? (int8_t)info->rx_ctrl->rssi : 0 };
+    m.msg = heap_caps_malloc_prefer(len + 1, 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, MALLOC_CAP_8BIT);
+    if (!m.msg) {
+        return;
+    }
+    memcpy(m.msg, data, len);
+    if (xQueueSend(s_nowq, &m, 0) != pdTRUE) {
+        free(m.msg);
+        return;
+    }
+    rt_dev_wake();                                         // the home task: do not wait
+}
+
+// ESP-NOW on the channel of the joined network. Not in low power: the board is awake only for moments.
+static void now_start(void)
+{
+    if (s_now || rt_power_on() || !s_nowq) {
+        return;
+    }
+    if (esp_now_init() != ESP_OK) {
+        return;
+    }
+    esp_now_peer_info_t p = { .channel = 0, .ifidx = WIFI_IF_STA, .encrypt = false };
+    memset(p.peer_addr, 0xff, 6);
+    if (esp_now_register_recv_cb(now_rx) != ESP_OK || esp_now_add_peer(&p) != ESP_OK) {
+        esp_now_deinit();
+        return;
+    }
+    s_now = true;
 }
 
 static void home_task(void *arg)
@@ -498,6 +649,12 @@ static void home_task(void *arg)
                 continue;
             }
         }
+        now_start();
+        now_rx_t m;
+        for (int burst = 0; burst < 8 && s_nowq && xQueueReceive(s_nowq, &m, 0) == pdTRUE; burst++) {
+            heard(m.msg, m.len, NULL, m.rssi);
+            free(m.msg);
+        }
         for (int burst = 0; burst < 8; burst++) {
             struct sockaddr_in from;
             socklen_t fl = sizeof(from);
@@ -507,7 +664,7 @@ static void home_task(void *arg)
             }
             char ip[16];
             inet_ntoa_r(from.sin_addr, ip, sizeof(ip));
-            heard(in, n, ip);
+            heard(in, n, ip, 0);
         }
         const int64_t now = esp_timer_get_time();
         if (s_changed || now - last > 2000000) {
@@ -533,7 +690,9 @@ void rt_home_start(void)
     s_in = s_out + 1300;
     s_boot = esp_random();
     s_ack = xSemaphoreCreateBinary();
+    s_nowq = xQueueCreate(6, sizeof(now_rx_t));
     rt_home_reload();
+    rt_push_boot();                                        // this board got new firmware from its page: give it to the group
     // the stack lives in external memory when there is some (internal memory is scarce); this task never touches flash
     if (xTaskCreatePinnedToCoreWithCaps(home_task, "home", 6144, NULL, 2, NULL, 0, MALLOC_CAP_SPIRAM) != pdPASS &&
         xTaskCreatePinnedToCore(home_task, "home", 5120, NULL, 2, NULL, 0) != pdPASS) {
@@ -541,7 +700,8 @@ void rt_home_start(void)
     }
 }
 
-// {"room":"Kitchen"} | {"group":"secret"} ("" leaves the group)
+// {"room":"Kitchen"} | {"group":"secret"} ("" leaves the group) | {"group":"key","open":true} (a group with no
+// password: another board gives its random key) | {"start":true} (start a group with no password)
 esp_err_t rt_home_set(const cJSON *j, char *why, size_t cap)
 {
     const cJSON *room = cJSON_GetObjectItemCaseSensitive(j, "room"), *group = cJSON_GetObjectItemCaseSensitive(j, "group");
@@ -559,8 +719,12 @@ esp_err_t rt_home_set(const cJSON *j, char *why, size_t cap)
             return ESP_ERR_INVALID_ARG;
         }
         rt_store_set("group", group->valuestring);
+        rt_store_set("group_open", n && cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(j, "open")) ? "1" : "0");
     }
     rt_home_reload();
+    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(j, "start"))) {
+        rt_home_begin();
+    }
     return ESP_OK;
 }
 
@@ -570,10 +734,13 @@ int rt_home_json(char *dst, size_t cap)
 {
     int n = 0;
     if (!s_lock) {
-        return snprintf(dst, cap, "{\"host\":\"%s\",\"room\":\"\",\"group\":false,\"rules\":[],\"boards\":[]}", rt_wifi_host());
+        return snprintf(dst, cap, "{\"host\":\"%s\",\"room\":\"\",\"group\":false,\"fw\":\"%s\",\"id\":\"%s\",\"rules\":[],\"boards\":[]}",
+                        rt_wifi_host(), RT_VERSION, rt_home_fwid());
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    ADD("{\"host\":\"%s\",\"room\":\"%s\",\"group\":%s,\"rules\":", rt_wifi_host(), s_room, s_grouped ? "true" : "false");
+    ADD("{\"host\":\"%s\",\"room\":\"%s\",\"group\":%s,\"open\":%s,\"fw\":\"%s\",\"id\":\"%s\",\"radio\":{\"on\":%s,\"sent\":%lu,\"heard\":%lu},\"rules\":",
+        rt_wifi_host(), s_room, s_grouped ? "true" : "false", s_grouped && s_open ? "true" : "false", RT_VERSION, rt_home_fwid(), s_now ? "true" : "false",
+        (unsigned long)s_now_tx, (unsigned long)s_now_rx);
     xSemaphoreGive(s_lock);
     const int k = rt_actions_brief(dst + n, n < (int)cap ? cap - n : 0);      // this board's own rules
     n = k < 0 ? (int)cap : n + k;
@@ -586,9 +753,12 @@ int rt_home_json(char *dst, size_t cap)
         if (!p->host[0] || now - p->seen_us > 60 * 1000000LL) {
             continue;
         }
-        ADD("%s{\"host\":\"%s\",\"room\":\"%s\",\"ip\":\"%s\",\"fw\":\"%s\",\"member\":%s,\"fresh\":%s,\"alerts\":%s,\"rules\":[",
-            any ? "," : "", p->host, p->room, p->ip, p->fw, p->member ? "true" : "false",
-            now - p->seen_us < FRESH_US ? "true" : "false", p->alerts ? "true" : "false");
+        const bool direct = p->now_us && now - p->now_us < FRESH_US;
+        ADD("%s{\"host\":\"%s\",\"room\":\"%s\",\"ip\":\"%s\",\"fw\":\"%s\",\"id\":\"%s\",\"member\":%s,\"fresh\":%s,\"alerts\":%s,"
+            "\"direct\":%s,\"rssi\":%d,\"lead\":%d,\"rules\":[",
+            any ? "," : "", p->host, p->room, p->ip, p->fw, p->id, p->member ? "true" : "false",
+            now - p->seen_us < FRESH_US ? "true" : "false", p->alerts ? "true" : "false", direct ? "true" : "false",
+            direct ? p->rssi : 0, direct ? p->lead_ms : 0);
         for (int k = 0; k < p->n; k++) {
             ADD("%s[\"%s\",%d]", k ? "," : "", p->rule[k], (p->on >> k) & 1);
         }
@@ -598,6 +768,10 @@ int rt_home_json(char *dst, size_t cap)
     xSemaphoreGive(s_lock);
     char sip[16], shost[20] = "";                          // who sends the group's alerts ("" = nobody)
     rt_home_sender(sip, sizeof(sip), shost, sizeof(shost));
-    ADD("],\"sender\":\"%s\"}", shost[0] ? shost : s_grouped && rt_alert_ready() && !rt_power_on() ? rt_wifi_host() : "");
+    ADD("],\"sender\":\"%s\",\"push\":", shost[0] ? shost : s_grouped && rt_alert_ready() && !rt_power_on() ? rt_wifi_host() : "");
+    if (n < (int)cap) {
+        n += rt_push_json(dst + n, cap - n);
+    }
+    ADD("}");
     return n < (int)cap ? n : -1;
 }

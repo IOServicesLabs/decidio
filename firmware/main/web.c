@@ -1,10 +1,13 @@
 // The board's own page (http://decidio-XXXX.local, or http://192.168.4.1 on the setup access point) and its JSON API.
 // Plain HTTP on your own network. If a page password is set, every request needs it (user name: decidio).
+// A board in a group also takes the group password (the group secret) with the same user name, and it always asks for
+// a password: one password opens the page of every board of the group.
 //
 //   GET  /               the page (www/index.html)
 //   GET  /api/info       board, model, Wi-Fi, alert counters, memory
 //   GET  /api/scan       networks in range (setup)
 //   POST /api/wifi       {"ssid","pass"} | {"forget":true}
+//   POST /api/camera     {"rotate":0|90|180|270}: turn the camera picture
 //   POST /api/alerts     any of tg_token tg_chat hook_url hook_hdr hook_fmt mqtt_url mqtt_user mqtt_pass alert_window
 //   POST /api/alerts/share  write this board's alert settings on the other boards of the group -> {"boards":[...]}
 //   POST /api/test       {"dest":"telegram|webhook|mqtt|probe"} -> {"ok","status","ms","detail"}
@@ -24,8 +27,9 @@
 //   POST /api/devices/test  {"slot":n,"do":"on|off|status"} -> {"ok","ms","detail","answer"}
 //   POST /api/devices/try   {"id","ip","ver","key","dp","do":"on|off|status|blink"}: a heard device, not saved
 //   GET  /api/home       this board's room, and the other boards heard (their rooms and which rules are on)
-//   POST /api/home       {"room":"Kitchen"} | {"group":"secret"}
-//   POST /api/home/add   {"host","pass"}: give another board this board's group secret
+//   POST /api/home       {"room":"Kitchen"} | {"group":"secret"} | {"start":true} (a group with no password)
+//   POST /api/home/add   {"host","pass"}: give another board this board's group secret (starts a group if necessary)
+//   POST /api/home/push  send the firmware this board runs to the other boards of the group (push.c)
 //   GET  /api/power      low-power mode: its settings, what the board does now, and the counts for the battery estimate
 //   POST /api/power      {"on","wakes","from","to","look","checkin","pir","gap","usb_sleep","mah","i_sleep","i_awake",
 //                        "i_wifi","bat_pin","bat_ratio"} (any of them) | {"stay":true|false} | {"reset_counts":true}
@@ -51,37 +55,58 @@
 static const char *TAG = "web";
 static httpd_handle_t s_srv;
 static char s_auth[120];                 // "Basic <base64 of decidio:password>", empty = no password
+static char s_gauth[120];                // the same for the group password, empty = not in a group
 
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
 extern const char recipes_json_start[] asm("_binary_recipes_json_start");
 extern const char recipes_json_end[] asm("_binary_recipes_json_end");
 
-static void load_auth(void)
+static void basic(char *dst, size_t cap, const char *pass)   // "" for an empty password
 {
-    char pass[64], plain[80];
-    s_auth[0] = 0;
-    if (rt_store_get("page_pass", pass, sizeof(pass)) && pass[0]) {
+    char plain[80];
+    dst[0] = 0;
+    if (pass && pass[0]) {
         const int n = snprintf(plain, sizeof(plain), "decidio:%s", pass);
         size_t o = 0;
-        strcpy(s_auth, "Basic ");
-        mbedtls_base64_encode((unsigned char *)s_auth + 6, sizeof(s_auth) - 7, &o, (const unsigned char *)plain, n);
-        s_auth[6 + o] = 0;
+        strcpy(dst, "Basic ");
+        mbedtls_base64_encode((unsigned char *)dst + 6, cap - 7, &o, (const unsigned char *)plain, n);
+        dst[6 + o] = 0;
     }
+}
+
+static void load_auth(void)
+{
+    char pass[64] = "";
+    rt_store_get("page_pass", pass, sizeof(pass));
+    basic(s_auth, sizeof(s_auth), pass);
+    basic(s_gauth, sizeof(s_gauth), rt_home_open() ? "" : rt_home_secret());   // a group can be without a password
+}
+
+void rt_web_auth_reload(void)
+{
+    load_auth();
+}
+
+// did another board of the group send this request (it carries the group's token)
+static bool from_peer(httpd_req_t *req)
+{
+    char got[40];
+    return httpd_req_get_hdr_value_str(req, "X-Decidio-Group", got, sizeof(got)) == ESP_OK && rt_home_token_ok(got);
 }
 
 static bool allowed(httpd_req_t *req)
 {
     char got[120];
-    const bool peer = httpd_req_get_hdr_value_str(req, "X-Decidio-Group", got, sizeof(got)) == ESP_OK &&
-                      rt_home_token_ok(got);
+    const bool peer = from_peer(req);
     if (!peer && (req->method != HTTP_GET || !strcmp(req->uri, "/"))) {
         rt_power_touch();                                // low power: a person opened the page or changed something
     }
-    if (!s_auth[0]) {
+    if (!s_auth[0] && !s_gauth[0]) {
         return true;
     }
-    if (httpd_req_get_hdr_value_str(req, "Authorization", got, sizeof(got)) == ESP_OK && !strcmp(got, s_auth)) {
+    if (httpd_req_get_hdr_value_str(req, "Authorization", got, sizeof(got)) == ESP_OK &&
+        ((s_auth[0] && !strcmp(got, s_auth)) || (s_gauth[0] && !strcmp(got, s_gauth)))) {
         return true;
     }
     if (peer) {
@@ -203,8 +228,8 @@ static esp_err_t h_info(httpd_req_t *req)
     char tz[40];
     rt_store_get("tz", tz, sizeof(tz));
     char at[8];
-    snprintf(b + n, cap - n, ",\"password\":%s,\"tz\":\"%s\",\"summary_at\":%d,\"heap_min\":%u}", s_auth[0] ? "true" : "false",
-             tz, rt_store_get("summary_at", at, sizeof(at)) ? atoi(at) : 21 * 60,
+    snprintf(b + n, cap - n, ",\"password\":%s,\"group_pass\":%s,\"cam_rot\":%d,\"tz\":\"%s\",\"summary_at\":%d,\"heap_min\":%u}",
+             s_auth[0] ? "true" : "false", s_gauth[0] ? "true" : "false", rt_cam_rotation(), tz, rt_store_get("summary_at", at, sizeof(at)) ? atoi(at) : 21 * 60,
              (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
     const esp_err_t err = json(req, b);
     free(b);
@@ -399,6 +424,19 @@ static esp_err_t h_radio(httpd_req_t *req)
     return json(req, "{\"ok\":true}");
 }
 
+// {"rotate":0|90|180|270}: turn the camera picture, for a board that is not upright
+static esp_err_t h_camera(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    cJSON *j = body(req);
+    const cJSON *r = j ? cJSON_GetObjectItemCaseSensitive(j, "rotate") : NULL;
+    const bool ok = cJSON_IsNumber(r) && rt_cam_rotate(r->valueint);
+    cJSON_Delete(j);
+    return ok ? json(req, "{\"ok\":true}") : bad(req, "rotate: 0, 90, 180 or 270");
+}
+
 static esp_err_t h_time(httpd_req_t *req)
 {
     if (!allowed(req)) {
@@ -506,7 +544,7 @@ static esp_err_t h_model(httpd_req_t *req)
         if (!g_state.run) {                               // the old model is gone: restart to report it cleanly
             json(req, "{\"error\":\"upload failed; restarting without a model\"}");
             vTaskDelay(pdMS_TO_TICKS(500));
-            esp_restart();
+            rt_restart();
         }
         return bad(req, "that is not a decidio model package");
     }
@@ -517,7 +555,7 @@ static esp_err_t h_model(httpd_req_t *req)
     }
     json(req, "{\"ok\":true,\"restart\":true}");
     vTaskDelay(pdMS_TO_TICKS(500));
-    esp_restart();
+    rt_restart();
     return ESP_OK;
 }
 
@@ -549,9 +587,12 @@ static esp_err_t h_firmware(httpd_req_t *req)
     if (esp_ota_end(h) != ESP_OK || esp_ota_set_boot_partition(next) != ESP_OK) {
         return bad(req, "the image did not pass its check; the running firmware is unchanged");
     }
+    if (!from_peer(req)) {
+        rt_push_mark();                                   // from a person: after the restart, the group gets it too
+    }
     json(req, "{\"ok\":true,\"restart\":true}");
     vTaskDelay(pdMS_TO_TICKS(500));
-    esp_restart();
+    rt_restart();
     return ESP_OK;
 }
 
@@ -563,7 +604,7 @@ static esp_err_t h_reset(httpd_req_t *req)
     json(req, "{\"ok\":true,\"restart\":true}");
     vTaskDelay(pdMS_TO_TICKS(300));
     rt_store_wipe();
-    esp_restart();
+    rt_restart();
     return ESP_OK;
 }
 
@@ -591,7 +632,7 @@ static esp_err_t h_reboot(httpd_req_t *req)
     }
     json(req, "{\"ok\":true}");
     vTaskDelay(pdMS_TO_TICKS(500));
-    esp_restart();
+    rt_restart();
     return ESP_OK;
 }
 
@@ -730,6 +771,9 @@ static esp_err_t h_power_set(httpd_req_t *req)
     return e == ESP_OK ? json(req, "{\"ok\":true}") : bad(req, why);
 }
 
+static int peer_call(const char *ip, const char *path, bool post, const char *data, const char *pass, httpd_req_t *relay,
+                     char *out, size_t cap);
+
 static esp_err_t h_home_set(httpd_req_t *req)
 {
     if (!allowed(req)) {
@@ -738,6 +782,17 @@ static esp_err_t h_home_set(httpd_req_t *req)
     cJSON *j = body(req);
     if (!j) {
         return bad(req, "expected JSON");
+    }
+    // a new group password on a board of a group: the other boards get it first, while they still know this board
+    const char *g = str(j, "group");
+    if (g && strlen(g) >= 8 && strlen(g) <= 39 && !strpbrk(g, "\"\\") && rt_home_secret()[0] && !from_peer(req) &&
+        strcmp(g, rt_home_secret())) {
+        char ips[8][16], hosts[8][20], data[80];
+        const int k = rt_home_members(ips, hosts, 8);
+        snprintf(data, sizeof(data), "{\"group\":\"%s\"}", g);
+        for (int i = 0; i < k; i++) {
+            peer_call(ips[i], "/api/home", true, data, NULL, NULL, NULL, 0);
+        }
     }
     char why[96] = "not saved";
     const esp_err_t e = rt_home_set(j, why, sizeof(why));
@@ -960,18 +1015,27 @@ static esp_err_t h_home_add(httpd_req_t *req)
     esp_err_t err;
     if (!host) {
         err = bad(req, "host missing");
-    } else if (!rt_home_secret()[0]) {
-        err = bad(req, "give this board a group secret first");
     } else if (!rt_home_peer_ip(host, ip, sizeof(ip))) {
         err = bad(req, "that board has not been heard on the network");
     } else {
-        snprintf(data, sizeof(data), "{\"group\":\"%s\"}", rt_home_secret());
+        rt_home_begin();                                 // not in a group: this starts one that has no password
+        snprintf(data, sizeof(data), "{\"group\":\"%s\",\"open\":%s}", rt_home_secret(), rt_home_open() ? "true" : "false");
         const int status = peer_call(ip, "/api/home", true, data, str(j, "pass"), NULL, out, sizeof(out));
         err = status == 200 ? json(req, "{\"ok\":true}")
               : bad(req, status == 401 ? "that board has a page password: enter it" : status ? "that board refused" : "that board did not answer");
     }
     cJSON_Delete(j);
     return err;
+}
+
+// send the firmware this board runs to the other boards of the group
+static esp_err_t h_home_push(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    char why[64] = "not started";
+    return rt_push_start(why, sizeof(why)) ? json(req, "{\"ok\":true}") : bad(req, why);
 }
 
 // /api/via/<board>/api/...: the same request, sent on to another board of the group
@@ -1049,6 +1113,7 @@ void rt_web_start(void)
         { .uri = "/api/rules", .method = HTTP_POST, .handler = h_rules },
         { .uri = "/api/radio", .method = HTTP_POST, .handler = h_radio },
         { .uri = "/api/time", .method = HTTP_POST, .handler = h_time },
+        { .uri = "/api/camera", .method = HTTP_POST, .handler = h_camera },
         { .uri = "/api/frame.jpg", .method = HTTP_GET, .handler = h_frame },
         { .uri = "/api/recipes", .method = HTTP_GET, .handler = h_recipes },
         { .uri = "/api/model", .method = HTTP_POST, .handler = h_model },
@@ -1063,6 +1128,7 @@ void rt_web_start(void)
         { .uri = "/api/home", .method = HTTP_GET, .handler = h_home },
         { .uri = "/api/home", .method = HTTP_POST, .handler = h_home_set },
         { .uri = "/api/home/add", .method = HTTP_POST, .handler = h_home_add },
+        { .uri = "/api/home/push", .method = HTTP_POST, .handler = h_home_push },
         { .uri = "/api/inputs", .method = HTTP_GET, .handler = h_inputs },
         { .uri = "/api/inputs", .method = HTTP_POST, .handler = h_inputs_set },
         { .uri = "/api/eye", .method = HTTP_GET, .handler = h_eye },

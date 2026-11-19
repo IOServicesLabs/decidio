@@ -121,6 +121,7 @@ esp_err_t rt_model_load(void);
 bool rt_cam_uses_pin(int map, int gpio);               // is this pin one of that map's camera pins
 int rt_cam_maps(void);                                 // how many pin maps are known
 const char *rt_cam_map_name(int map);
+bool rt_model_hw(bool *no_camera, char *profile, size_t cap);   // what the model package says about the board
 esp_err_t rt_cam_probe(int map);                       // start the sensor on this pin map
 esp_err_t rt_cam_start(int colors, int lag, int frame_ms);   // after a successful probe
 bool rt_cam_acquire(const uint8_t **cur, const uint8_t **prev, uint32_t *seq);   // lock held until release
@@ -128,13 +129,18 @@ void rt_cam_release(void);
 int rt_cam_colors(void);
 const char *rt_cam_sensor(void);
 void rt_cam_set_orient(int orient);
+bool rt_cam_rotate(int deg);                           // the user's turn of the picture: 0, 90, 180 or 270; kept
+int rt_cam_rotation(void);
 // One frame of a part of the picture at the sensor's own resolution. x, y, w are in pixels of the 160x120 frame; the
 // part is 4:3 (h = 3w/4). The answer comes later on the camera task: the frame (160x120 RGB565), the part that was
 // really read, and how long the wide view was away. false = this sensor cannot, or a request is waiting already.
 typedef void (*rt_cam_zoom_fn)(const uint8_t *rgb565, uint16_t id, int x, int y, int w, int h, int took_ms);
 bool rt_cam_can_zoom(void);
 bool rt_cam_zoom(int x, int y, int w, uint16_t id, rt_cam_zoom_fn fn);
-void rt_cam_standby(void);                             // stop taking frames and put the sensor in standby (before deep sleep)
+void rt_restart(void);                                 // restart the chip; the camera sensor is put in standby first
+void rt_cam_standby(void);
+void rt_cam_off(void);                                 // before a restart: stop the camera interface of the chip
+void rt_cam_quiet(void);                               // a start without the camera: reset that interface                             // stop taking frames and put the sensor in standby (before deep sleep)
 
 // audio.c - PDM mic, streaming log-mel frames + raw PCM history
 int rt_audio_probe(int clk, int din);                  // listen for 0.2 s: the spread of the samples, 0 = nothing there
@@ -226,6 +232,7 @@ esp_err_t rt_actions_set(const char *json);            // rules from the web pag
 int rt_actions_json(char *dst, size_t cap);            // {"rules":[...],"state":[...],"custom":bool}
 int rt_actions_brief(char *dst, size_t cap);           // [["name",1],...]: which rules are on, for the other boards
 bool rt_actions_uses_dev(int slot);
+bool rt_actions_uses_radio(void);
 typedef struct {                // the rules' states, kept through deep sleep (power.c)
     uint32_t crc;               // of the rules they belong to
     int n, summary_day;
@@ -306,14 +313,25 @@ bool rt_home_sender(char *ip, size_t ip_cap, char *host, size_t host_cap);   // 
 bool rt_home_handoff(const struct cJSON *alert, const char *ip);  // give it an alert; true when it said it has it
 const char *rt_home_label(void);                       // this board's room, or its name when it has no room
 int rt_home_members(char ips[][16], char hosts[][20], int max);  // the other boards of the group heard lately
+int rt_home_fleet(char ips[][16], char hosts[][20], char ids[][10], int max);   // the same, with each board's firmware build
+const char *rt_home_fwid(void);                        // this board's firmware build: 8 hex characters
 bool rt_home_token_ok(const char *tok);
 const char *rt_home_token(void);
 const char *rt_home_secret(void);
+bool rt_home_open(void);                               // the group has no password
+void rt_home_begin(void);                              // start a group with no password, when not in a group
 esp_err_t rt_home_set(const struct cJSON *j, char *why, size_t cap);
 int rt_home_json(char *dst, size_t cap);
 
+// push.c - one board gives the firmware it runs to the other boards of the group
+void rt_push_boot(void);                               // at start: new firmware came from the page before the restart
+void rt_push_mark(void);                               // new firmware came from the page: push it after the restart
+bool rt_push_start(char *why, size_t cap);             // push now (the page's button)
+int rt_push_json(char *dst, size_t cap);               // {"state":"idle|run|done","boards":[{"host":..,"state":..}]}
+
 // web.c - the board's own page and its JSON API
 void rt_web_start(void);
+void rt_web_auth_reload(void);                         // the page password or the group password changed
 
 // alert.c - messages to Telegram, a webhook and MQTT, sent from their own task
 typedef struct {

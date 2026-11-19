@@ -143,7 +143,7 @@ esp_err_t rt_audio_start(int sr, int clip, bool mel)
     s_mels = mel ? g_model.n_mels : 0;
     s_hist = clip + s_hop;
     s_pcm = alloc(sizeof(int16_t) * s_hist, false);
-    s_mel = alloc(sizeof(float) * s_frames * (s_mels > 0 ? s_mels : 1), true);
+    s_mel = alloc(sizeof(float) * s_frames * (s_mels > 0 ? s_mels : 1), false);   // one row is written for each hop: external memory is fast enough
     ESP_RETURN_ON_FALSE(s_pcm && s_mel, ESP_ERR_NO_MEM, TAG, "buffers");
     memset(s_pcm, 0, sizeof(int16_t) * s_hist);
 

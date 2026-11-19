@@ -27,6 +27,8 @@
   <ul class="boards" aria-label="Supported boards">
     <li><span><b>Seeed XIAO ESP32S3 Sense</b>: camera and microphone.</span></li>
     <li><span><b>ESP32-S3-CAM</b> with the ESP32-S3-EYE pin layout: camera, no microphone.</span></li>
+    <li><span><b>Other ESP32-S3 boards</b> with 8 MB flash or more: no camera, no microphone. The rules use the Wi-Fi movement
+      score, the pins, sensors and the other boards.</span></li>
   </ul>
   <p class="links">
     <a href="https://github.com/IOServicesLabs/decidio">decidio on GitHub</a>
@@ -60,8 +62,12 @@
         <div class="tiles" id="boards"><p class="dim">Loading the boards...</p></div>
       </fieldset>
       <p class="note">The firmware is the same for each board. When the board starts, the firmware finds the camera and the
-        microphone. Your selection changes only the model. If you do not know your type of board, select the first type. It
-        operates on each board. On a board without a microphone, its sound questions are off.</p>
+        microphone. Your selection changes only the model. If you do not know your type of camera board, select the first
+        type. It operates on each camera board. On a board without a microphone, its sound questions are off.</p>
+      <p class="note">For a board that has no camera, or a board that must not use its camera, select a type without a
+        camera. The firmware then does not look for a camera. The microphone type gives the sound ideas. The type without
+        camera and microphone gives the ideas that use the Wi-Fi movement score. On the page of the board, you can add
+        rules on pins, sensors and other boards. Only ESP32-S3 boards operate with this firmware.</p>
     </div>
   </section>
 

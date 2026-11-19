@@ -89,7 +89,7 @@ function drawIdeas() {
   $("list").replaceChildren(...(rows.length ? rows : [el("p", { className: "empty", textContent: "No idea agrees with your search. Type a different word." })]));
   const hidden = index.ideas.length - all.length;
   $("count").textContent = "The list shows " + list.length + " of " + all.length + " ideas for this board." +
-    (hidden ? " " + hidden + " ideas need a microphone. They are not shown for this board." : "") + " Firmware " + index.version + ".";
+    (hidden ? " " + hidden + " ideas need a camera or a microphone that this type of board does not have. They are not shown." : "") + " Firmware " + index.version + ".";
 }
 
 // ---- step 3 ----------------------------------------------------------------------------------------------------------

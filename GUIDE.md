@@ -69,15 +69,20 @@ the other secrets in its flash memory without encryption. A person who takes the
 
 **CAUTION:** Give the group secret only to boards that you own. The board keeps the local keys of devices and the
 group secret in its flash memory without encryption. A board in the group can change each other board in the group,
-because its token replaces the page password. When you add a board from the page of a different board, the secret
-goes through the network without encryption.
+because its token replaces the page password. It can also replace their firmware. When you add a board from the
+page of a different board, the secret goes through the network without encryption. A group that you make with **Add to the
+group** only has a random secret and no password. If you save a group password, it becomes the group secret: it
+opens the page of each board of the group (user name `decidio`), and the browser sends it without encryption.
+Without a group password, the group does not protect the pages of its boards.
 
 **CAUTION:** Set up the board immediately after it starts its setup network. The setup network has no password. It
 stays open until the board joins your Wi-Fi, and for two minutes after that. During that time, a person near the
 board can set it up instead of you.
 
 A board accepts rule states only from broadcasts that carry the signature of the group secret. It rejects a copy of
-an old broadcast during the same run of the board that sent it (until that board restarts).
+an old broadcast during the same run of the board that sent it (until that board restarts). A board in a group also
+sends each broadcast as an ESP-NOW radio message. A board accepts a radio message only with the signature. The radio
+messages have no encryption, thus a radio near your home can read the names and the states of the rules.
 
 To install an idea, type the commands below in this sequence. Replace `COM5` with the port of your board. Replace
 `MyNetwork` with the name of your Wi-Fi network. The comment on each line tells what the command does.
@@ -101,12 +106,13 @@ To open the page of the board, do one of these steps:
 
 | Tab | What it does |
 |---|---|
+| Group | Shows each board of the group on one page: its camera frame, its strongest answers and its rules. Gives the firmware of this board to the other boards. The tab shows only in a group |
 | Status | Shows the board, the model, the free memory, the Wi-Fi signal, and the alerts that the board sent and that failed |
-| Live | Shows each answer when the model gives it, the other inputs and the states of the rules. Shows the camera frame to aim the board, only while you select **show what it sees** |
+| Live | Shows each answer when the model gives it, the other inputs and the states of the rules. Shows the camera frame to aim the board, only while you select **show what it sees**. **Turn the picture** turns the frame by 90, 180 or 270 degrees |
 | Eye | Shows what moves in the camera frame, a close-up, the sharp close-up and the events of the fly eye. Sets the eye on or off |
 | Ideas | Shows the rules that operate now, with their thresholds, times, pin, device and alert. Adds any of the 63 ideas, or a rule of your own |
 | Devices | Shows the Smart Life (Tuya) devices that this board switches. Adds a device (id and local key), tests it, and makes a light follow people |
-| Boards | Sets the room and the group of this board. Shows the other boards on the network and their rules, and adds them to the group |
+| Boards | Sets the room of this board and, if you want one, the group password. Shows the other boards on the network, their rules and how this board hears them, and adds them to the group |
 | Alerts | Sets a Telegram bot, a webhook and MQTT. The webhook sends JSON or plain text, with one optional header, for example to ntfy, Discord, Slack or Home Assistant. Each one has a test button |
 | Radio | Shows the live movement score from the signal of your router, to help you select a threshold |
 | Wi-Fi | Changes the network. Sets a password for the page |
@@ -123,7 +129,8 @@ procedure. This is a summary:
 | Part | What it does |
 |---|---|
 | `devices.c` | Sends commands to the device on its own port 6668, with the Tuya local protocol (versions 3.1, 3.3, 3.4 and 3.5). It uses one connection for each command, and the local key of the device. It gets the addresses and the protocol versions from the broadcasts of the devices |
-| `home.c` | Broadcasts the name and the room of each board every 2 s, and immediately after a change. Inside a group, it also broadcasts the states of the rules, signed with the group secret |
+| `home.c` | Broadcasts the name and the room of each board every 2 s, and immediately after a change. Inside a group, it also broadcasts the states of the rules, signed with the group secret, and it sends the same message with ESP-NOW to the boards in radio range |
+| `push.c` | After new firmware comes from the page, sends the app image of this board to each board of the group that has a different build (`POST /api/firmware` with the token of the group). `POST /api/home/push` starts it by hand |
 | `tools/fake_tuya_device.py` | A device to test against, without a key |
 
 Thus a rule can test `board:<name>` conditions, and one page can set up each board through `/api/via/<board>/...`.
@@ -641,6 +648,12 @@ can use `s3cam`, because both profiles have no microphone.
 the camera pin layouts of the board family. A board with a USB-serial chip holds the receive pin of UART0 high. The
 XIAO has no such chip. Then `board.c` listens for 0.2 s to find a PDM microphone. The samples of a real microphone
 change, but a pin with no microphone gives one value.
+
+A model package can tell the firmware that the board has no camera: `"hw":{"camera":false}` in the package header.
+`decidio install --board mic_only` and `--board plain` write this. `board.c` then does not try a camera pin layout.
+With `"profile":"plain"`, it uses the profile `plain`: no camera, no microphone, and each pin that the chip does not
+need is free for rules and sensors. A model with a picture input then gets a black frame if the board has a
+microphone. If the board has no microphone, the model does not run.
 
 The board saves the result. These console commands use it:
 

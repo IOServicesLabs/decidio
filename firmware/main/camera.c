@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "driver/gpio.h"
+#include "esp_private/periph_ctrl.h"
 #include "esp_camera.h"
 #include "esp_check.h"
 #include "esp_heap_caps.h"
@@ -100,16 +101,48 @@ esp_err_t rt_cam_probe(int map)
     return err;
 }
 
-void rt_cam_set_orient(int o)
+// The turn of the picture that the user chose, for a board that is not upright: 0, 90, 180 or 270 degrees. A half
+// turn is the sensor's flip and mirror, so the eye and the close-up turn with it. A quarter turn is done when the
+// frame is made smaller (resample): only the square frame of the model, the page and the alert photo turns.
+static int s_orient = -1, s_rot;
+static volatile bool s_quarter;
+
+static void orient_apply(void)
 {
     sensor_t *s = esp_camera_sensor_get();
-    if (o < 0 || o > 3) {
-        o = board_orient();
+    int o = s_orient < 0 || s_orient > 3 ? board_orient() : s_orient;
+    if (s_rot >= 180) {
+        o ^= 3;
     }
+    s_quarter = s_rot == 90 || s_rot == 270;
     if (s) {
         s->set_vflip(s, o & 1);
         s->set_hmirror(s, (o >> 1) & 1);
     }
+}
+
+void rt_cam_set_orient(int o)
+{
+    s_orient = o;
+    orient_apply();
+}
+
+int rt_cam_rotation(void)
+{
+    return s_rot;
+}
+
+bool rt_cam_rotate(int deg)
+{
+    if (deg != 0 && deg != 90 && deg != 180 && deg != 270) {
+        return false;
+    }
+    char v[8];
+    snprintf(v, sizeof(v), "%d", deg);
+    rt_store_set("cam_rot", v);
+    s_rot = deg;
+    orient_apply();
+    return true;
 }
 
 static inline void px_rgb(const uint8_t *src, int x, int y, int *r, int *g, int *b)
@@ -122,11 +155,13 @@ static inline void px_rgb(const uint8_t *src, int x, int y, int *r, int *g, int 
 
 static void resample(const uint8_t *src, uint8_t *dst)
 {
+    const bool q = s_quarter;
     for (int oy = 0; oy < RT_CAM; oy++) {
-        const int sy = s_map[oy][0], fy = s_map[oy][1];
-        const int y0 = sy, y1 = sy + 1 < SRC_H ? sy + 1 : sy;
         for (int ox = 0; ox < RT_CAM; ox++) {
-            const int sx = CROP_X + s_map[ox][0], fx = s_map[ox][1];
+            const int ix = q ? oy : ox, iy = q ? RT_CAM - 1 - ox : oy;    // a quarter turn: the source column is the row
+            const int sy = s_map[iy][0], fy = s_map[iy][1];
+            const int y0 = sy, y1 = sy + 1 < SRC_H ? sy + 1 : sy;
+            const int sx = CROP_X + s_map[ix][0], fx = s_map[ix][1];
             const int x1 = sx + 1 < SRC_W ? sx + 1 : sx;
             int r[4], g[4], b[4];
             px_rgb(src, sx, y0, &r[0], &g[0], &b[0]);
@@ -307,6 +342,11 @@ esp_err_t rt_cam_start(int colors, int lag, int frame_ms)
         }
         nvs_close(nv);
     }
+    char rot[8] = "";
+    s_rot = rt_store_get("cam_rot", rot, sizeof(rot)) ? atoi(rot) : 0;
+    if (s_rot != 90 && s_rot != 180 && s_rot != 270) {
+        s_rot = 0;
+    }
     rt_cam_set_orient(orient);
     for (int i = 0; i < 6; i++) {             // let auto-exposure settle
         camera_fb_t *fb = esp_camera_fb_get();
@@ -370,6 +410,26 @@ void rt_cam_standby(void)
     } else if (s_pid == OV3660_PID || s_pid == OV5640_PID) {
         s->set_reg(s, 0x3008, 0x40, 0x40);
     }
+}
+
+// Before a restart by software: such a restart does not reset the camera interface of the chip. Its clock output and
+// its frame receiver would continue into a start that does not use the camera.
+void rt_cam_off(void)
+{
+    if (!s_probed) {
+        return;
+    }
+    rt_cam_standby();
+    esp_camera_deinit();
+    s_probed = false;
+}
+
+// At a start that does not use the camera: stop what an earlier start may have left running (see rt_cam_off; a
+// restart after an error does not come through there).
+void rt_cam_quiet(void)
+{
+    periph_module_reset(PERIPH_LCD_CAM_MODULE);
+    periph_module_reset(PERIPH_LEDC_MODULE);
 }
 
 int rt_cam_colors(void)

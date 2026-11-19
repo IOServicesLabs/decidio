@@ -32,6 +32,7 @@ This file tells you how to install an idea and how to set up the board. These fi
   |---|---|---|---|
   | Seeed XIAO ESP32S3 Sense | Yes | Yes | The USB-C socket |
   | ESP32-S3-CAM (Freenove and equivalent, ESP32-S3-EYE pin layout) | Yes | No | The socket with the label UART |
+  | A different ESP32-S3 board with 8 MB of flash memory or more | No | No | The USB socket of the board |
 
 - A USB cable that carries data. A cable that can only charge does not show a port.
 - A computer with Windows, Linux or macOS.
@@ -42,25 +43,91 @@ by itself. You do not tell it which board you have. The Status tab of the page o
 
 The firmware is for the ESP32-S3 chip with 8 MB of flash memory or more and PSRAM. A different ESP32-S3 camera
 board must have a board profile first. Refer to [skills/add-board](skills/add-board/SKILL.md). The firmware does not
-operate on other ESP32 chips.
+operate on other ESP32 chips (ESP32, ESP32-S2, ESP32-C3, ESP32-C6).
+
+A board does not need a camera. Refer to "A board without a camera".
 
 An idea that uses sound operates only on a board with a microphone. If you install such an idea on a board without a
 microphone, the install command stops and tells you. All other ideas operate on each board.
 
 ## Quick install
 
-There are three procedures. Each procedure gives the same result. Use one of them.
+There are three procedures. Each procedure gives the same result. Use one of them. Procedure A is the easiest.
 
 | Procedure | Use it if | Necessary |
 |---|---|---|
-| A: Install with commands | You can type commands in a terminal | Python 3.10, 3.11 or 3.12 |
-| B: Install from a browser | You do not want to install Python | Chrome or Edge on a computer |
+| A: Install from a browser | You do not want to install Python | Chrome or Edge on a computer |
+| B: Install with commands | You can type commands in a terminal | Python 3.10, 3.11 or 3.12 |
 | C: Install with an LLM | You have an LLM agent that can run commands on your computer | Python 3.10, 3.11 or 3.12 |
 
 **CAUTION: If you want to keep the software that is on the board now, make a copy of the flash memory before the
 install. The install replaces the firmware and the model on the board.**
 
-### Procedure A: Install with commands
+### Procedure A: Install from a browser
+
+The installer website is at https://ioserviceslabs.github.io/decidio/. It installs an idea through USB with
+ESP Web Tools. Python is not necessary.
+
+You must use Chrome or Edge on a computer. A phone cannot do step 3 (**Install**) and step 4 (**Set up**) of the
+website.
+
+The website has four numbered steps:
+
+| Step on the website | Function |
+|---|---|
+| **1. Board** | You select the type of board |
+| **2. Idea** | You find one idea and select it |
+| **3. Install** | The button **Connect and install** starts ESP Web Tools. It writes the firmware and the idea to the board |
+| **4. Set up** | The button **Connect to the board** connects the website to the board through USB (Web Serial). Then you can set the Wi-Fi, the page password and the alerts. Refer to "From the installer website, through USB" |
+
+The types of board at step 1 are:
+
+| Type of board | Select it for |
+|---|---|
+| Camera and microphone (Seeed XIAO ESP32S3 Sense) | A board with a microphone. This type also operates on a board without a microphone, but the sound questions are off |
+| Camera, no microphone (ESP32-S3-CAM, ESP32-S3-EYE pinout) | A board without a microphone |
+| Microphone, camera not used (Seeed XIAO ESP32S3 Sense) | A XIAO ESP32S3 Sense that must not use its camera, or that has no camera connected. It gives the ideas that use sound |
+| No camera, no microphone (other ESP32-S3 board, 8 MB flash or more) | An ESP32-S3 board that has no camera and no microphone. It gives the ideas that use the Wi-Fi movement score |
+
+For the two types without a camera, refer to "A board without a camera".
+
+1. Connect the board to the computer with the USB cable.
+2. Open https://ioserviceslabs.github.io/decidio/ in Chrome or Edge.
+3. At **1. Board**, select your type of board. If you do not know the type of a camera board, select
+   **Camera and microphone (Seeed XIAO ESP32S3 Sense)**. It operates on each camera board.
+4. At **2. Idea**, find the idea that you want and select it.
+5. At **3. Install**, click **Connect and install**.
+6. In the browser window, select the port of the board.
+7. Follow the instructions on the page until the install is complete.
+8. Do the procedure "Connect the board to Wi-Fi". You can use step **4. Set up** of the website for this.
+
+The builds are generated files of approximately 50 MB. This repository does not contain them. A GitHub Actions
+workflow runs `python tools/make_builds.py` and publishes the `installer/` folder with the builds on the installer
+website.
+
+#### Use a local copy of the website
+
+If you cannot use the published website, you can serve a copy from your computer. For this option, Python is
+necessary.
+
+1. Do steps 1 and 2 of procedure B.
+2. Type these commands to make the builds and serve the website:
+
+   ```
+   python tools/make_builds.py
+   python -m http.server -d installer 8000
+   ```
+
+3. Open `http://localhost:8000` in Chrome or Edge.
+4. Do steps 1 and 3 to 8 of the procedure above.
+
+To publish your own copy, put the `installer` folder with its builds on a web host that uses `https://`. A browser
+lets a page use USB only from `https://` or from `localhost`. Refer to [installer/README.md](installer/README.md).
+
+Note: The build files load correctly in the browser. An install through the installer website was not tested on a
+board.
+
+### Procedure B: Install with commands
 
 You must have Python 3.10, 3.11 or 3.12.
 
@@ -107,66 +174,6 @@ You must have Python 3.10, 3.11 or 3.12.
 Note: Step 2 installs only the parts that are necessary to install an idea. It does not install TensorFlow. To teach
 or train a model, use `pip install -e .` as GUIDE.md tells you.
 
-### Procedure B: Install from a browser
-
-The installer website is at https://ioserviceslabs.github.io/decidio/. It installs an idea through USB with
-ESP Web Tools. Python is not necessary.
-
-You must use Chrome or Edge on a computer. A phone cannot do step 3 (**Install**) and step 4 (**Set up**) of the
-website.
-
-The website has four numbered steps:
-
-| Step on the website | Function |
-|---|---|
-| **1. Board** | You select the type of board |
-| **2. Idea** | You find one idea and select it |
-| **3. Install** | The button **Connect and install** starts ESP Web Tools. It writes the firmware and the idea to the board |
-| **4. Set up** | The button **Connect to the board** connects the website to the board through USB (Web Serial). Then you can set the Wi-Fi, the page password and the alerts. Refer to "From the installer website, through USB" |
-
-The types of board at step 1 are:
-
-| Type of board | Select it for |
-|---|---|
-| Camera and microphone (Seeed XIAO ESP32S3 Sense) | A board with a microphone. This type also operates on a board without a microphone, but the sound questions are off |
-| Camera, no microphone (ESP32-S3-CAM, ESP32-S3-EYE pinout) | A board without a microphone |
-
-1. Connect the board to the computer with the USB cable.
-2. Open https://ioserviceslabs.github.io/decidio/ in Chrome or Edge.
-3. At **1. Board**, select your type of board. If you do not know the type, select
-   **Camera and microphone (Seeed XIAO ESP32S3 Sense)**. It operates on each board.
-4. At **2. Idea**, find the idea that you want and select it.
-5. At **3. Install**, click **Connect and install**.
-6. In the browser window, select the port of the board.
-7. Follow the instructions on the page until the install is complete.
-8. Do the procedure "Connect the board to Wi-Fi". You can use step **4. Set up** of the website for this.
-
-The builds are generated files of approximately 50 MB. This repository does not contain them. A GitHub Actions
-workflow runs `python tools/make_builds.py` and publishes the `installer/` folder with the builds on the installer
-website.
-
-#### Use a local copy of the website
-
-If you cannot use the published website, you can serve a copy from your computer. For this option, Python is
-necessary.
-
-1. Do steps 1 and 2 of procedure A.
-2. Type these commands to make the builds and serve the website:
-
-   ```
-   python tools/make_builds.py
-   python -m http.server -d installer 8000
-   ```
-
-3. Open `http://localhost:8000` in Chrome or Edge.
-4. Do steps 1 and 3 to 8 of the procedure above.
-
-To publish your own copy, put the `installer` folder with its builds on a web host that uses `https://`. A browser
-lets a page use USB only from `https://` or from `localhost`. Refer to [installer/README.md](installer/README.md).
-
-Note: The build files load correctly in the browser. An install through the installer website was not tested on a
-board.
-
 ### Procedure C: Install with an LLM
 
 Use this procedure if you have an LLM agent that can run commands on your computer. Examples are Claude Code,
@@ -189,7 +196,34 @@ not to ask for them.**
 5. When the agent tells you, do the procedure "Connect the board to Wi-Fi".
 
 If your LLM cannot run commands, give it the contents of this file and of INSTALL_WITH_LLM.md. It can then tell you
-each command of procedure A, and you type the commands.
+each command of procedure B, and you type the commands.
+
+### A board without a camera
+
+You can use decidio without a camera. There are two types of board for this:
+
+| Type | What operates |
+|---|---|
+| `mic_only`: a XIAO ESP32S3 Sense that does not use its camera | The sound questions of the model, the Wi-Fi movement score, pins, sensors, and rules that depend on other boards. The picture questions are off |
+| `plain`: an ESP32-S3 board with no camera and no microphone | The Wi-Fi movement score, pins, sensors, and rules that depend on other boards. The model does not run |
+
+With these types, the firmware does not look for a camera. Thus it does not use the camera pins. On a `plain` board,
+a rule or a sensor can use each pin that the chip does not need for itself.
+
+- On the installer website, select the type at **1. Board**. The list at **2. Idea** then shows only the ideas that
+  the type can run.
+- With commands, add `--board mic_only` or `--board plain`. For example:
+
+  ```
+  decidio install radio-room-movement --port COM5 --board plain
+  ```
+
+A `plain` board can be in a group. It can send the alerts of the group, show the **Group** tab, give the firmware to
+the other boards, and switch a pin or a Smart Life device when a rule of a different board is on.
+
+To use the camera again, install an idea with a camera type.
+
+The board must have an ESP32-S3 chip. Only boards with 8 MB of flash memory or more can hold the firmware.
 
 ## Connect the board to Wi-Fi
 
@@ -259,6 +293,9 @@ the page and change the settings.**
 
 The user name for the page is `decidio`.
 
+A group of boards can have a group password. It opens the page of each board of the group. Refer to
+"The password of the group".
+
 You can also set the page password at step **4. Set up** of the installer website. Type it in the **Page password**
 form, then click **Save page password**.
 
@@ -266,12 +303,13 @@ form, then click **Save page password**.
 
 | Tab | Function |
 |---|---|
+| Group | Shows all the boards of the group on one page: the camera picture, the answers, the rules and the alerts of each board. The tab shows only when the board is in a group. Refer to "See all the boards on one page" |
 | Status | Shows the board, the model, the free memory, the Wi-Fi signal and the number of alerts |
-| Live | Shows each answer of the model, the other inputs (the eye, the radio, sensors) and the state of each rule. Shows the camera picture while the box **show what it sees** is selected |
+| Live | Shows each answer of the model, the other inputs (the eye, the radio, sensors) and the state of each rule. Shows the camera picture while the box **show what it sees** is selected. **Turn the picture** turns the camera picture for a board that is not upright |
 | Eye | Shows the objects that move in the camera picture, a close-up of one object, and the events of the eye. Refer to "The eye that sees movement" |
 | Ideas | Shows the rules that operate now. You can change a threshold, a time, a pin, a device or an alert. You can add more ideas |
 | Devices | Adds Smart Life devices and does a test of each device. Makes a rule that switches a light |
-| Boards | Sets the room name and the group. Shows the other boards and their rules |
+| Boards | Sets the room name. Shows the other boards and their rules, and adds them to the group. Sets the group password, if you want one |
 | Alerts | Sets the Telegram bot, the webhook and the MQTT broker. Each destination has a **Send test** button |
 | Power | Sets low power for a board on a battery, and shows the estimate of the battery life. Refer to "Low power (battery)" |
 | Radio | Shows the movement score from the signal of your router |
@@ -433,14 +471,18 @@ To do a test without a real device:
 
 ## Use more than one board
 
-Boards on the same Wi-Fi find each other. Boards with the same **group secret** tell each other which of their rules
-are on. Then you can do these things:
+Boards on the same Wi-Fi find each other. You put them in a group from the page of one board. A password is not
+necessary. The boards of a group tell each other which of their rules are on. Then you can do these things:
 
-- See each room on one page.
+- See each board on one page: its camera picture, its answers and its rules.
 - Set up each board from the page of one board.
 - Make a rule on one board that depends on a rule of a different board.
+- See and change the alerts of each board on one page.
+- Open the page of each board with one password, if you set a group password.
+- Update the firmware of one board. That board then updates the other boards.
 
-There is no main board. Each board continues to operate when the other boards are off.
+There is no main board. Each board has the same page, thus you can open the page of any board of the group. Each
+board continues to operate when the other boards are off.
 
 ### Make a group
 
@@ -450,12 +492,118 @@ There is no main board. Each board continues to operate when the other boards ar
 4. Open the **Boards** tab.
 5. Type a room name in **Room**, for example `Kitchen`.
 6. Click **Save** below the room name.
-7. Type a group secret of 8 characters or more in **Group secret**.
-8. Click **Save** below the group secret.
-9. Find the other boards in the list **Boards on this network**.
-10. If a board has a page password, type that password first.
-11. Click **Add to the group** for each board.
-12. Wait a few seconds. Each board shows **in the group** and the state of its rules.
+7. Find the other boards in the list **Boards on this network**.
+8. If a board has a page password, type that password first. A board without a page password needs nothing.
+9. Click **Add to the group** for each board.
+10. Wait a few seconds. Each board shows **in the group** and the state of its rules.
+
+The page then opens on the **Group** tab. The group has no password until you set one.
+
+### The password of the group
+
+A group password is optional. Without it, each person on your network can open the page of a board, unless that
+board has a page password of its own.
+
+To set a group password:
+
+1. Open the page of a board of the group.
+2. Open the **Boards** tab.
+3. Type a password of 8 characters or more in **Group password**.
+4. Click **Save the password**. The board gives the password to the other boards of the group that answer.
+5. The browser asks for a user name and a password. Type `decidio` and the group password.
+
+If a board was off at that time, it is no longer in the group. Add it again with **Add to the group**.
+
+The group password is then the password of the page of each board in the group. The user name is `decidio`.
+
+- Each board of the group asks for a password.
+- A page password of the board itself is not necessary. If the board has one, that password also opens its page.
+- The browser asks one time for each board that you open directly. It does not ask again when you look at a
+  different board through the **Group** tab or the **Board** list.
+- When a board leaves the group (**Leave the group**), its page asks only for its own page password again.
+
+### See all the boards on one page
+
+1. Open the page of a board of the group. Each board of the group can show this page.
+2. Click the **Group** tab.
+
+The tab shows one card for each board:
+
+| Part of the card | Meaning |
+|---|---|
+| The dot and the name | The dot is green when the board answers. The name is the room, then the name of the board |
+| The line below the name | How this board hears that board (refer to "The radio link between boards"), and the decisions each second |
+| The picture | The camera picture of the board (96 x 96 points). Clear **show the camera pictures** to stop the pictures |
+| The bars | The answers of the model that are "yes" or that name a thing, a maximum of six, the strongest first |
+| The dots at the bottom | The rules of the board. A green dot shows a rule that is on |
+
+To see all the tabs of one board, click **Open** on its card. The **Board** list at the top then shows that board. To
+go back, click the **Group** tab.
+
+The page gets the data of the other boards through the board that you opened. It asks one board at a time, thus each
+card gets new data one time in approximately one second for each board of the group.
+
+### See and change the alerts of all the boards
+
+The card **Alerts of the group** on the **Group** tab shows these items for each board:
+
+- If Telegram, the webhook and MQTT are set up, and how many alerts went out and how many failed.
+- Which board sends the alerts of the group.
+- Each rule of the board, with the boxes **send an alert**, **with a photo** and **urgent**.
+
+A change to a box is saved on that board immediately.
+
+- To enter the Telegram, webhook or MQTT data of a board, click **Set up the alerts** on its line. The **Alerts** tab
+  of that board opens. The button **Use these alert settings on all boards in the group** on that tab copies the data
+  to the other boards.
+- To change the other parts of a rule, click **Change the rules**. The **Ideas** tab of that board opens.
+
+### Update the firmware of all the boards
+
+Each board uses the same firmware file. Thus one board can give its firmware to the other boards.
+
+1. Open the page of one board directly (not through the **Board** list).
+2. Open the **System** tab.
+3. Below **Firmware**, select the file `decidio_rt.bin`. Click **Update firmware**.
+4. Wait. The board restarts with the new firmware. Then it sends the firmware to each other board of the group
+   that has a different firmware. Each of those boards makes a check of the file, then restarts with it.
+5. Open the **Group** tab. The card **Firmware of the group** shows the firmware of each board and the progress.
+
+Each board keeps its model and its settings. In the test, the second board had the new firmware 66 seconds after the
+upload to the first board.
+
+- To send the firmware that a board has now, click **Give the firmware of this board to the other boards** on the
+  **Group** tab.
+- The card shows the firmware as a version and a build, for example `0.4.0, build a08c64b4`. Two boards have the same
+  firmware when the builds are the same.
+- A board that gets firmware from a different board does not send it on. Thus the firmware does not go round the
+  group again and again.
+- A board in low power sleeps, thus it gets no update. Wake it first (refer to "Open the page of a board that
+  sleeps"), then click the button.
+- A board with firmware older than this function also gets the update.
+- If a board does not take the firmware after three attempts, the card shows **the update failed**.
+
+**CAUTION: Do not disconnect the power of a board during the update. A board that loses power during the update
+keeps its old firmware, but you must send the update again.**
+
+### The radio link between boards
+
+Boards of a group that are near each other also send their messages directly from radio to radio (ESP-NOW). These
+messages do not go through the router. A board reads such a message immediately. A message through the router
+waits up to 0.25 seconds before the board reads it. Thus a rule that depends on a different board follows it
+faster.
+
+- The link starts by itself when a board is in a group. There is no setting.
+- Each message also goes through the router. Thus boards that are too far apart for the radio link continue to
+  operate together.
+- The **Group** tab and the **Boards** tab show how a board hears each other board: **heard straight from its
+  radio** with the signal in dBm, or **heard through the router only**.
+- A board accepts a radio message only if it has the signature of the group password.
+- The link operates only between boards on the same Wi-Fi channel. Boards on the same router are on the same channel.
+- A board in low power does not use the link.
+
+In the test with two boards near each other, each board got the radio message approximately 0.25 seconds before the
+copy through the router.
 
 ### Set up a different board from this page
 
@@ -654,6 +802,11 @@ The Alerts tab also has fields for a webhook (for ntfy, Discord, Slack or Home A
 - A command to a Smart Life device goes to that device on your Wi-Fi. It does not go to the internet.
 - Each board sends its name, its room and its firmware version to the local network each 2 seconds. A board in a
   group also sends the names and the states of its rules.
+- A board in a group also sends its name, its room, its address and the names and the states of its rules as radio
+  messages (ESP-NOW). These messages have a signature but no encryption. A radio near your home can read them.
+- In a group, a board that gets new firmware from its page sends that firmware to the other boards of the group, on
+  your local network.
+- The **Group** tab shows the camera picture of each board of the group to each person who has that tab open.
 - In a group, a board gives the text of its alerts to the board that sends the alerts, on your local network. For an
   alert with a photo, that board gets the picture from the page of the board that saw it.
 - **Use these alert settings on all boards in the group** sends the bot token, the webhook and the MQTT settings to
@@ -675,12 +828,18 @@ error as it does on a correct answer. Do not let the safety of a person depend o
 **CAUTION: Keep the board where other persons cannot take it. The board keeps the Wi-Fi password and the bot token
 in its flash memory without encryption. A person who takes the board can read them.**
 
-**CAUTION: Add a board to the group only on a network that you trust. The group secret goes through your network
-without encryption when you add a board. The board also keeps the local keys of your devices and the group secret in
-its flash memory without encryption.**
+**CAUTION: Add a board to the group only on a network that you trust. The group password goes through your network
+without encryption when you add a board, and each time the browser opens the page of a board. The board also keeps
+the local keys of your devices and the group password in its flash memory without encryption.**
 
-**CAUTION: Give the group secret only to boards that you own. A board in the group can change the settings of each
-other board in the group. The page password does not stop it.**
+**CAUTION: Give the group password only to boards that you own and to persons that you trust. A board in the group
+can change the settings of each other board in the group, and it can replace their firmware. The page password does
+not stop it.**
+
+**CAUTION: Use a group password that you use for nothing else.**
+
+**CAUTION: A group without a group password does not protect the pages of its boards. Each person on your network
+can then open a board that has no page password, and through it change each other board of the group.**
 
 **CAUTION: Connect the board to your Wi-Fi immediately after the install. The setup network decidio-xxxx has no
 password. It stays open until the board connects to your Wi-Fi. During that time, a person near you can set up the
@@ -702,6 +861,9 @@ Before you point a camera or a microphone at other persons, make sure that the l
 | A device does not switch, and the page shows "wrong local key?" | Find the key again with the tinytuya wizard. The key changes when you add the device to the app again |
 | A device does not show in "Heard on the network" | Wait 30 seconds. If it does not show, type its ID and its address |
 | A different board does not show on the Boards tab | Make sure that it has firmware 0.3 or later and that it is on the same Wi-Fi. Some routers keep Wi-Fi devices apart ("client isolation"). Set this function to off |
+| The browser asks for a password, and the board has no page password | The board is in a group that has a group password. Type the user name `decidio` and the group password |
+| The **Group** tab does not show | The board is not in a group, or no other board of the group answers. Open the **Boards** tab |
+| A board shows **heard through the router only** | The boards are too far apart for the radio link, or one board is in low power. The boards continue to operate together through the router |
 | An idea gives too many or too few alerts | Open the Live tab and read the answers. Then change the threshold of the rule on the Ideas tab |
 
 ## What was tested
@@ -718,9 +880,32 @@ These items were tested on one XIAO ESP32S3 Sense and one ESP32-S3-CAM with a Wi
 - The inputs on the Live tab, the chip temperature, and an I2C scan with no part connected.
 - The refusal of a pin that the camera uses.
 
+These items were tested on one XIAO ESP32S3 Sense and one ESP32-S3-CAM in one group, on the same Wi-Fi and near each
+other (firmware 0.4, build a08c64b4):
+
+- A group of two real boards. One board got the group password on its page. It added the other board, which had no
+  page password.
+- A group with no password (build b95dc160). One board added the other board with **Add to the group** only. The
+  pages stayed open without a password. The radio link and the firmware update of the group operated.
+- A group password saved on one board of that group. The other board got it. Each board then refused a request
+  without the password.
+- The card **Alerts of the group** in Chrome. A change to **send an alert** for a rule of the other board was saved
+  on that board.
+- The group password. Each board refused a request without a password and a request with an incorrect password.
+  Each board accepted the group password.
+- The radio link. Each board heard the other board directly (-27 to -38 dBm). A message of 453 characters, with 8
+  rules, also arrived by radio.
+- The **Group** tab in Chrome, from the page of the ESP32-S3-CAM: the two cards with the camera pictures, the answers
+  and the rules, new data each few seconds, and **Open**. The browser got the page through a program on the computer
+  that added the password.
+- An upload of new firmware to the XIAO only. The XIAO restarted and sent the firmware to the ESP32-S3-CAM. That
+  board had the same build 66 seconds after the upload.
+- The button **Give the firmware of this board to the other boards** on the ESP32-S3-CAM. The XIAO had the same build
+  98 seconds later. A board that got firmware from the other board did not send it on.
+
 These items were tested on one XIAO ESP32S3 Sense with a Windows computer (firmware 0.3):
 
-- Procedure A, with the small install of step 2.
+- Procedure B (the commands), with the small install of step 2.
 - The Wi-Fi setup from a phone, and through USB with `decidio wifi`.
 - The tabs of the page, and rules that stay after a restart.
 - Webhook alerts and MQTT alerts from a rule.
@@ -740,13 +925,38 @@ These items were tested on one XIAO ESP32S3 Sense with a Windows computer (firmw
   awake for approximately 5.5 seconds. `power off` on the console during a wake switched low power off. The Power tab
   was examined in a browser at two widths.
 
+These items were tested on the same two boards with the types without a camera (firmware 0.4, build e6d439a3):
+
+- The type `mic_only` on the XIAO ESP32S3 Sense. The board did not start its camera. The picture questions were off.
+  The sound questions answered at 9.5 decisions each second in a quiet room. No sound was made for the test, thus the
+  quality of the sound answers without a picture was not measured.
+- The type `plain` on the ESP32-S3-CAM (its camera was not used). The model did not run. The rule of the idea
+  `radio-room-movement` operated, and the Wi-Fi movement score started by itself. The board stayed in the group.
+- A change from a camera idea to a `plain` idea and back through the page of the board, three times. The board came
+  back on Wi-Fi each time.
+- **Turn the picture** at each of the four positions on the ESP32-S3-CAM. The board kept the position through a
+  restart.
+- A group with no password, a group password that one board gave to the other board, and the card **Alerts of the
+  group**.
+
 These items were not tested:
 
-- Procedure B (the installer website) to the end of an install.
+- An ESP32-S3 board that has no camera hardware, and an ESP32-S3 board without PSRAM.
+- An install of a type without a camera through USB (the installer website or `decidio install`). The packages were
+  sent through the page of the board.
+- The delivery of an alert from the card **Alerts of the group**. No alert destination was set up.
+
+- Procedure A (the installer website) to the end of an install.
 - Step 4 (**Set up**) of the installer website with a board.
 - A command to a real Smart Life device. No local key was available. The simulated device uses the code of the
   tinytuya client, thus it agrees with that client, but a real device can be different.
-- Two real boards in a group. Only one board was available.
+- A group of three boards or more, and the firmware update of more than one board.
+- The password window of the browser for the group password.
+- Boards that are too far apart for the radio link, and the time that a rule on one board follows a rule of a
+  different board.
+- The firmware update of the group with a board in low power, and with a board that loses power during the update.
+- The firmware update of a board that has firmware older than this function. Before the test, the two boards got
+  the new firmware directly.
 - The current of a board in low power. No current meter was available. Thus the battery estimates use currents that
   were not measured.
 - Low power with a motion sensor, with the battery voltage input, with wake hours, and at a check-in. Low power on

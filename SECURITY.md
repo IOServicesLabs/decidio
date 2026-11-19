@@ -40,6 +40,10 @@ one of these limits is a vulnerability.
 | The board keeps the Wi-Fi password and the bot token in its flash memory without encryption. A person who takes the board can read them. | Keep the board in a place that you control. |
 | The board keeps the local keys of your devices and the group secret in its flash memory without encryption. | Keep the board in a place that you control. |
 | The group secret goes through your network without encryption when you add a board to a group. | Add boards only on a network that you trust. |
+| A group password is also the password of the page of each board in the group. The browser sends it through your network without encryption. | Use a group password that you use for nothing else. |
+| A group without a group password does not protect the pages of its boards. Each person on your network can open a board that has no page password, and through it change each other board of the group. | Set a group password on the Boards tab. |
+| A board in a group sends the names and the states of its rules as ESP-NOW radio messages. They have a signature but no encryption. A radio near your home can read them. | Do not put private data in the name of a rule or of a room. |
+| A board in the group can replace the firmware of each other board in the group. | Give the group secret only to boards that you own. |
 | A board in the group can change the settings of each other board in the group. The page password does not stop it. | Give the group secret only to boards that you own. |
 | A board refuses a copy of an old group message only until the board that sent it restarts. | Give the group secret only to boards that you own. |
 | The setup network decidio-xxxx has no password. It stays open until the board connects to your Wi-Fi, and for two minutes after that. During that time, a person near you can set up the board. | Connect the board to your Wi-Fi immediately after the install. |

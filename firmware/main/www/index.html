@@ -50,6 +50,9 @@ button.b.danger { background:none; color:var(--bad); border:1px solid var(--line
 #eyeFov { width:192px; height:192px; image-rendering:pixelated; border-radius:4px; border:1px solid var(--line); background:#000; display:block; }
 #eyeCv { width:100%; min-width:240px; max-width:520px; aspect-ratio:4/3; image-rendering:pixelated; border-radius:4px; border:1px solid var(--line); background:#000; display:block; cursor:crosshair; }
 .ev { font-size:14px; padding:4px 0; border-top:1px solid var(--line); display:flex; gap:10px; } .ev:first-child { border:0; } .ev span { color:var(--dim); white-space:nowrap; }
+.gboards { display:grid; grid-template-columns:repeat(auto-fit, minmax(290px, 1fr)); gap:14px; margin-bottom:14px; } .gboards .card { margin:0; min-width:0; }
+.gimg { width:120px; height:120px; image-rendering:pixelated; border-radius:4px; border:1px solid var(--line); background:var(--bg); display:block; flex:none; } .gimg[hidden] { display:none; }
+.gboards .q { grid-template-columns:minmax(90px, 42%) 1fr; font-size:13px; padding:2px 0; } .gboards .meter { height:20px; } .gboards .meter span { line-height:20px; }
 footer { max-width:820px; margin:auto; padding:6px 16px 28px; display:flex; flex-wrap:wrap; gap:8px 16px; justify-content:space-between; align-items:center; font-size:13px; color:var(--dim); }
 footer a { color:var(--ink); } footer .usa { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:3px 12px; }
 footer svg { height:14px; width:auto; border:1px solid var(--line); display:block; }
@@ -65,6 +68,26 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
   <div class="banner" id="setupBanner" hidden>This board is not on your Wi-Fi yet. Pick your network on the Wi-Fi tab.</div>
   <div class="banner" id="lpBanner" hidden></div>
 
+  <section id="t-group">
+    <div class="card">
+      <div class="row"><h2 class="grow" style="margin:0">All boards of the group</h2><label class="chk"><input type="checkbox" id="gCam" checked>show the camera pictures</label></div>
+      <p class="note" id="gNote"></p>
+    </div>
+    <div class="gboards" id="gBoards"></div>
+    <div class="card">
+      <h2>Alerts of the group</h2>
+      <p class="note" style="margin-top:0" id="gSender"></p>
+      <div id="gAlerts"></div><div class="msg" id="gAlertMsg"></div>
+      <p class="note">Each rule of each board is shown here. A change to a check box is saved on that board immediately. <b>Set up the alerts</b> opens the Alerts tab of that board, where you enter the Telegram, webhook and MQTT data and can copy them to all the boards. <b>Change the rules</b> opens its Ideas tab.</p>
+    </div>
+    <div class="card">
+      <h2>Firmware of the group</h2>
+      <dl class="kv" id="gFw"></dl>
+      <div class="row"><button class="b ghost" id="gPush">Give the firmware of this board to the other boards</button></div><div class="msg" id="gPushMsg"></div>
+      <p class="note">When you update the firmware of one board on its System tab, that board gives the new firmware to the other boards of the group after it restarts. Each board restarts with it and keeps its model and its settings. The button does the same for the firmware that this board runs now. A board that sleeps (low power) is not updated.</p>
+    </div>
+  </section>
+
   <section id="t-status">
     <div class="card"><h2>Board</h2><dl class="kv" id="board"></dl></div>
     <div class="card"><h2>Wi-Fi</h2><dl class="kv" id="wifi"></dl></div>
@@ -76,6 +99,7 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <div class="row"><h2 class="grow" style="margin:0">What the model says now</h2><span class="note" id="rate" style="margin:0"></span></div>
       <div id="answers" style="margin-top:8px"></div>
       <p class="note" id="noModel" hidden>No model is flashed. Upload one on the System tab.</p>
+      <p class="note" id="modelOff" hidden>The model does not run on this board, because the board has no camera and no microphone. The rules use the other inputs: the radio, the pins, the sensors and the other boards of the group.</p>
       <p class="note" id="naNote" hidden></p>
     </div>
     <div class="card" id="inputsCard" hidden>
@@ -86,7 +110,10 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
     <div class="card" id="camCard">
       <div class="row"><h2 class="grow" style="margin:0">Camera</h2><label class="chk"><input type="checkbox" id="showCam">show what it sees</label></div>
       <img id="frame" alt="camera frame" hidden>
-      <p class="note">The frame the model looks at (96x96, shown larger), to aim the board. It is sent to this page only while the box is ticked.</p>
+      <div class="row" style="margin-top:8px"><label for="camRot" style="margin:0">Turn the picture</label>
+        <select id="camRot" style="max-width:220px"><option value="0">not turned</option><option value="90">a quarter turn to the right</option><option value="180">upside down</option><option value="270">a quarter turn to the left</option></select></div>
+      <div class="msg" id="camRotMsg"></div>
+      <p class="note">The frame the model looks at (96x96, shown larger), to aim the board. It is sent to this page only while the box is ticked. If the board is not upright, turn the picture until it is upright here: the model was trained on upright pictures. With a quarter turn, the Eye tab still shows the picture without the quarter turn.</p>
     </div>
     <div class="card"><h2>Rules</h2><div id="liveRules"></div></div>
   </section>
@@ -180,9 +207,10 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
     <div class="card">
       <h2>Group</h2>
       <p class="note" style="margin-top:0" id="groupState"></p>
-      <label for="group">Group secret (8 characters or more; the same on every board)</label><input id="group" type="password" autocomplete="new-password" placeholder="unchanged">
-      <div class="row"><button class="b" id="saveGroup">Save</button><button class="b ghost" id="leaveGroup">Leave the group</button></div><div class="msg" id="groupMsg"></div>
-      <p class="note">Boards with the same secret tell each other which of their rules are on, so a rule here can depend on a rule in another room, and this page can set up every board (the Board list at the top). It all stays on your own network. The secret is stored unencrypted and is sent in clear when you add a board from here.</p>
+      <label for="group">Group password (optional; 8 characters or more)</label><input id="group" type="password" autocomplete="new-password" placeholder="unchanged">
+      <div class="row"><button class="b" id="saveGroup">Save the password</button><button class="b ghost" id="leaveGroup">Leave the group</button></div><div class="msg" id="groupMsg"></div>
+      <p class="note">To make a group, press <b>Add to the group</b> on a board in the list below. A password is not necessary. The boards of a group tell each other which of their rules are on, so a rule here can depend on a rule in another room, and this page can show and set up every board (the Group tab, and the Board list at the top). Boards that are near each other also talk straight from radio to radio (ESP-NOW), which is faster than through the router. It all stays on your own network.</p>
+      <p class="note">If you save a group password, all the boards of the group get it, and the page of each board then asks for it (user name <b>decidio</b>). Without a password, each person on your network can open the pages, unless a board has a page password of its own. The password is stored unencrypted and is sent in clear when you add a board from here and when the browser logs in.</p>
     </div>
     <div class="card">
       <h2>Boards on this network</h2>
@@ -374,10 +402,11 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
 <script>
 const $ = id => document.getElementById(id);
 const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props || {}); e.append(...kids); return e; };
-const TABS = [["status","Status"],["live","Live"],["eye","Eye"],["ideas","Ideas"],["devices","Devices"],["boards","Boards"],["alerts","Alerts"],["power","Power"],["radio","Radio"],["wifi","Wi-Fi"],["system","System"]];
+const TABS = [["group","Group"],["status","Status"],["live","Live"],["eye","Eye"],["ideas","Ideas"],["devices","Devices"],["boards","Boards"],["alerts","Alerts"],["power","Power"],["radio","Radio"],["wifi","Wi-Fi"],["system","System"]];
 let inputs = null, eyeTracks = [], eyeBusy = false;
 let info = null, state = null, recipes = null, draft = null, dirty = false, tab = "status";
 let via = new URLSearchParams(location.search).get("board") || "", home = null, devs = null, editSlot = -1, boardsSig = "";
+const hash0 = location.hash.slice(1); let landed = false;
 const devMsg = {};
 const base = () => via ? "/api/via/" + via : "";        // another board of the group: this board passes the request on
 const hist = [];
@@ -389,11 +418,13 @@ function show(t) {
   if (t === "ideas") loadRecipes();
   if (t === "ideas" || t === "devices") loadDevs();
   if (t === "boards") { boardsSig = ""; loadHome(); }
+  if (t === "group") groupTick();
   if (t === "live" || t === "ideas" || t === "system") loadInputs();
   if (t === "power") loadPower(true);
   tick();
 }
 for (const [id, name] of TABS) $("nav").append(el("button", { id: "n-" + id, textContent: name, onclick: () => show(id) }));
+$("n-group").hidden = true;
 
 const api = (path, body) => call(base() + path, body);
 async function call(path, body) {
@@ -428,9 +459,10 @@ async function refresh() {
   const st = { off: "off", setup: "waiting for setup", connecting: "joining " + w.ssid + (w.reason ? " (" + (REASON[w.reason] || "reason " + w.reason) + ")" : ""), online: "joined " + w.ssid }[w.state];
   kv($("wifi"), [["State", st], ["Address", w.ip ? "http://" + w.ip + "  or  http://" + w.host + ".local" : "-"],
     ["Signal", w.rssi ? w.rssi + " dBm, channel " + w.channel : "-"], ["Setup access point", w.setup_open ? "open (" + w.host + ")" : "closed"],
-    ["Page password", d.password ? "set" : "not set"]]);
+    ["Page password", d.password ? (d.group_pass ? "set (the group password also opens the page)" : "set") : d.group_pass ? "the group password" : "not set"]]);
   const line = x => x.set ? x.sent + " sent, " + x.failed + " failed" + (x.last ? " (last error: " + x.last + ")" : "") : "not set up";
   $("n-eye").hidden = !sn.camera; $("camCard").hidden = !sn.camera;
+  if (document.activeElement !== $("camRot")) $("camRot").value = String(d.cam_rot || 0);
   drawSens();
   if (first) loadInputs();
   loadPower(false);
@@ -455,6 +487,7 @@ function drawLive() {
   if (!state) return;
   const d = state.decision;
   $("noModel").hidden = !!(info && info.info.model);
+  $("modelOff").hidden = !(info && info.info.model && !(d && d.answers) && !info.info.sensors.camera && !info.info.mic);
   if (d && d.answers) {
     $("rate").textContent = (d.invoke_us / 1000).toFixed(0) + " ms per decision, " + d.hz + " a second" + (state.run ? "" : " (paused)");
     const na = naSet();
@@ -504,6 +537,11 @@ async function tick() {
   if (tab === "system") $("clock").textContent = "";
 }
 $("showCam").onchange = () => { $("frame").hidden = !$("showCam").checked; };
+$("camRot").onchange = async () => {
+  const r = await api("/api/camera", { rotate: Number($("camRot").value) });
+  say($("camRotMsg"), r.ok, r.ok ? "Saved. The board keeps this after a restart." : "Not saved: " + (r.error || "no answer"));
+  if (r.ok && !$("showCam").checked) $("showCam").click();
+};
 $("motion").onchange = async () => { $("motion").dataset.want = $("motion").checked ? "1" : "0"; await api("/api/radio", { motion: $("motion").checked }); hist.length = 0; };
 
 // ---- rules ----
@@ -681,7 +719,8 @@ async function upload(path, file, box, what) {
   say(box, true, "Uploading " + what + " (" + Math.round(file.size / 1024) + " KB)...");
   let r;
   try { r = await (await fetch(path, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file })).json(); } catch (e) { r = { error: "the board did not answer" }; }
-  say(box, r.ok, r.ok ? "Done. The board is restarting; this page reloads in 15 seconds." : "Failed: " + r.error);
+  const grp = path === "/api/firmware" && home && home.group && home.boards.some(b => b.member);
+  say(box, r.ok, r.ok ? "Done. The board is restarting; this page reloads in 15 seconds." + (grp ? " Then this board gives the firmware to the other boards of the group (see the Group tab)." : "") : "Failed: " + r.error);
   if (r.ok) setTimeout(() => location.reload(), 15000);
 }
 $("upModel").onclick = () => upload("/api/model", $("modelFile").files[0], $("modelMsg"), "the model");
@@ -836,6 +875,12 @@ async function loadHome() {
     if (info) fillQuestions();
   }
   $("viaRow").hidden = !m.length;
+  const grouped = h.group && m.length > 0;
+  $("n-group").hidden = !grouped;
+  if (grouped && !landed && !hash0 && !via) show("group");          // a group: start on the page that shows every board
+  landed = true;
+  if (!grouped && tab === "group") show("status");
+  if (tab === "group") drawGroup();
   $("groupAlerts").hidden = !h.group || !m.length;
   if (h.sender !== undefined) {
     const s = h.sender === h.host ? h : m.find(b => b.host === h.sender);
@@ -853,7 +898,7 @@ $("via").onchange = () => switchTo($("via").value);
 function drawBoards() {
   if (!home) return;
   if (document.activeElement !== $("room")) $("room").value = home.room;
-  $("groupState").textContent = home.group ? "This board is in a group." : "This board is not in a group. Give it a secret, then add the other boards below.";
+  $("groupState").textContent = home.group ? "This board is in a group " + (home.open ? "that has no password." : "that has a password.") + (home.radio && home.radio.on ? " Its radio link to the boards near it is on." : "") : "This board is not in a group. Add a board from the list below.";
   $("leaveGroup").hidden = !home.group;
   const sig = JSON.stringify(home.boards);
   if (sig === boardsSig || ($("boards").contains(document.activeElement) && document.activeElement.tagName === "INPUT")) return;
@@ -864,10 +909,9 @@ function drawBoards() {
       el("div", { className: "row" }, el("span", { className: "dot" + (b.fresh ? " on" : "") }), el("h3", { className: "grow" }, label(b), el("span", { className: "tag", textContent: b.member ? "in the group" : "not in the group" })),
         el("a", { href: "http://" + b.ip, target: "_blank", textContent: "open", style: "font-size:14px" }),
         ...(b.member ? [el("button", { className: "b sm ghost", textContent: "Set up here", onclick: () => { switchTo(b.host); show("ideas"); } })] : [])),
-      el("div", { className: "cond", textContent: b.ip + ", firmware " + b.fw + (b.fresh ? "" : ", not heard for a while") }),
+      el("div", { className: "cond", textContent: b.ip + ", firmware " + b.fw + (b.fresh ? "" : ", not heard for a while") + (b.member && b.fresh ? (b.direct ? ", heard straight from its radio (" + b.rssi + " dBm" + (b.lead > 0 ? ", " + b.lead + " ms before the copy through the router" : "") + ")" : ", heard through the router only") : "") }),
       b.member ? el("div", { className: "row" }, ...(b.rules.length ? b.rules.map(([n, on]) => el("span", { className: "row", style: "gap:0;font-size:14px;margin-right:10px" }, el("span", { className: "dot" + (on ? " on" : "") }), n)) : [el("span", { className: "note", style: "margin:0", textContent: "no rules" })]))
         : el("div", { className: "row" }, pass, el("button", { className: "b sm", textContent: "Add to the group", onclick: async () => {
-            if (!home.group) return say(msg, false, "Give this board a group secret first.");
             const r = await call("/api/home/add", { host: b.host, pass: pass.value });
             say(msg, r.ok, r.ok ? "Added. It shows as in the group within a few seconds." : "Not added: " + (r.error || "no answer"));
             if (r.ok) { boardsSig = ""; setTimeout(loadHome, 2500); }
@@ -879,9 +923,114 @@ $("saveRoom").onclick = async () => { const r = await call("/api/home", { room: 
 $("saveGroup").onclick = async () => {
   if ($("group").value.length < 8) return say($("groupMsg"), false, "Use 8 characters or more.");
   const r = await call("/api/home", { group: $("group").value }); $("group").value = "";
-  say($("groupMsg"), r.ok, r.ok ? "Saved. Add the other boards below, or enter the same secret on their own pages." : r.error); loadHome();
+  say($("groupMsg"), r.ok, r.ok ? "Saved. The other boards of the group that answered have it too. The browser now asks for it: the user name is decidio." : r.error); loadHome();
 };
 $("leaveGroup").onclick = async () => { const r = await call("/api/home", { group: "" }); say($("groupMsg"), r.ok, r.ok ? "This board left the group." : r.error); loadHome(); };
+
+// ---- group: every board on one page ----
+const gSt = {}; let gBusy = false, gSig = "";
+const gBase = h => home && h === home.host ? "" : "/api/via/" + h;
+const gAll = () => home ? [{ host: home.host, room: home.room, fresh: true, self: true, fw: home.fw, id: home.id }, ...home.boards.filter(b => b.member)] : [];
+function gCard(b) {
+  const g = gSt[b.host] || (gSt[b.host] = {});
+  g.dot = el("span", { className: "dot" }); g.title = el("h3", { className: "grow" }); g.meta = el("div", { className: "cond", style: "margin-left:18px" });
+  g.img = el("img", { className: "gimg", alt: "camera picture", hidden: true }); g.ans = el("div", { className: "grow" }); g.rules = el("div", { className: "row", style: "margin-top:8px" });
+  g.card = el("div", { className: "card" },
+    el("div", { className: "row" }, g.dot, g.title, el("button", { className: "b sm ghost", textContent: "Open", onclick: () => { switchTo(b.self ? "" : b.host); show("live"); } })),
+    g.meta, el("div", { className: "row", style: "align-items:flex-start;flex-wrap:nowrap;margin-top:6px" }, g.img, g.ans), g.rules);
+  return g.card;
+}
+function gAnswers(g) {
+  const d = g.state && g.state.decision;
+  if (!d || !d.answers) return [el("p", { className: "note", style: "margin:0", textContent: g.err || "No answers yet." })];
+  const na = new Set(g.info && g.info.info.model && g.info.info.model.na || []);
+  const rows = Object.entries(d.answers).filter(([q]) => !na.has(q)).map(([q, a]) =>
+    a.p_true !== undefined ? (a.p_true >= 0.5 ? [q, a.p_true, "yes  " + a.p_true.toFixed(2)] : null)
+    : a.choice !== undefined ? (a.choice !== "none" ? [q, a.confidence, a.choice + "  " + a.confidence.toFixed(2)] : null) : [q, a.confidence, "score " + a.score]).filter(Boolean);
+  rows.sort((x, y) => y[1] - x[1]);
+  return rows.length ? rows.slice(0, 6).map(([q, p, t]) => el("div", { className: "q" }, el("div", { className: "n", textContent: q }), meter(p, t)))
+    : [el("p", { className: "note", style: "margin:0", textContent: "The model sees and hears nothing special now." })];
+}
+let gASig = "";
+function drawGAlerts(all) {
+  const s = home.sender === home.host ? home : home.boards.find(b => b.host === home.sender);
+  $("gSender").textContent = !home.sender ? "No board of the group has a place to send alerts to. Set one up on one board, then copy it to the other boards on the Alerts tab of that board."
+    : "The alerts of the whole group go out from " + label(s || { host: home.sender }) + (home.sender === home.host ? " (this board)." : ".") + " The other boards give their alerts to it.";
+  const tally = a => a && [a.telegram, a.webhook, a.mqtt].map(x => [x.set, x.sent, x.failed]);
+  const sig = JSON.stringify(all.map(b => { const g = gSt[b.host], r = g.state && g.state.rules; return [b.host, b.room, home.sender, g.cam, tally(g.info && g.info.alerts), r && r.rules.map(x => [x.name, x.notify, x.photo, x.urgent, x.cooldown_s])]; }));
+  if (sig === gASig) return;
+  gASig = sig;
+  const dest = x => x.set ? "set up, " + x.sent + " sent" + (x.failed ? ", " + x.failed + " failed" : "") : "not set up";
+  $("gAlerts").replaceChildren(...all.map(b => {
+    const g = gSt[b.host], a = g.info && g.info.alerts, r = g.state && g.state.rules, go = t => () => { switchTo(b.self ? "" : b.host); show(t); };
+    const chk = (text, v, set) => el("label", { className: "chk" }, el("input", { type: "checkbox", checked: !!v, onchange: async e => {
+      set(e.target.checked); gASig = ""; g.gen = (g.gen || 0) + 1;                     // an answer asked for before this change is old
+      let x; try { x = await call(gBase(b.host) + "/api/rules", r.rules); } catch (err) { x = {}; }
+      say($("gAlertMsg"), x.ok, x.ok ? "Saved on " + label(b) + "." : "Not saved on " + label(b) + ": " + (x.error || "no answer"));
+      drawGroup();
+    } }), text);
+    return el("div", { className: "rule" },
+      el("div", { className: "row" }, el("h3", { className: "grow" }, label(b), ...(home.sender === b.host ? [el("span", { className: "tag", textContent: "sends the alerts" })] : [])),
+        el("button", { className: "b sm ghost", textContent: "Set up the alerts", onclick: go("alerts") }), el("button", { className: "b sm ghost", textContent: "Change the rules", onclick: go("ideas") })),
+      el("div", { className: "cond", textContent: a ? "Telegram: " + dest(a.telegram) + ". Webhook: " + dest(a.webhook) + ". MQTT: " + dest(a.mqtt) + "." : "No answer from this board yet." }),
+      ...(r ? (r.rules.length ? r.rules.map(x => el("div", { className: "row", style: "margin-top:4px" }, el("span", { style: "min-width:150px;font-size:14px", textContent: x.name }),
+        chk("send an alert", x.notify, v => x.notify = v), ...(x.notify ? [...(g.cam ? [chk("with a photo", x.photo, v => x.photo = v)] : []), chk("urgent", x.urgent, v => x.urgent = v),
+          el("span", { className: "note", style: "margin:0", textContent: "at most every " + x.cooldown_s + " s" })] : [])))
+        : [el("p", { className: "note", style: "margin:4px 0 0", textContent: "This board has no rules." })]) : []));
+  }));
+}
+function drawGroup() {
+  if (!home) return;
+  const all = gAll(), sig = all.map(b => b.host).join();
+  if (sig !== gSig) { gSig = sig; $("gBoards").replaceChildren(...all.map(gCard)); }
+  for (const b of all) {
+    const g = gSt[b.host];
+    g.dot.className = "dot" + (b.fresh && !g.err ? " on" : "");
+    g.title.replaceChildren(label(b), ...(b.self ? [el("span", { className: "tag", textContent: "this board" })] : []));
+    g.meta.textContent = (b.self ? "this page comes from it" : !b.fresh ? "not answering" : b.direct ? "heard straight from its radio, " + b.rssi + " dBm" : "heard through the router only")
+      + (g.state && g.state.decision ? ", " + g.state.decision.hz + " decisions a second" : "") + (g.err && b.fresh ? ", " + g.err : "");
+    g.img.hidden = !$("gCam").checked || !g.cam;
+    g.ans.replaceChildren(...gAnswers(g));
+    const r = g.state && g.state.rules;
+    g.rules.replaceChildren(...(r && r.rules.length ? r.rules.map((x, k) => el("span", { className: "row", style: "gap:0;font-size:14px;margin-right:10px" }, el("span", { className: "dot" + (r.state[k].on ? " on" : "") }), x.name))
+      : [el("span", { className: "note", style: "margin:0", textContent: r ? "no rules" : "" })]));
+  }
+  drawGAlerts(all);
+  $("gNote").textContent = all.length + " boards. Each card shows what the model of that board answers now, and which of its rules are on. Open shows all the tabs of that board.";
+  const ps = home.push || { state: "idle", boards: [] }, pst = Object.fromEntries(ps.boards.map(x => [x.host, x.state]));
+  kv($("gFw"), all.map(b => [label(b), b.fw + (b.id ? ", build " + b.id : ", an older build") + (b.self ? " (this board)" : b.id && b.id === home.id ? ", the same as this board" : ", not the same as this board")
+    + (!b.self && pst[b.host] && ps.state !== "idle" ? " - " + ({ waiting: "waits for the firmware", sending: "the firmware goes to it now", restarting: "has the firmware, restarts", updated: "updated", same: "no update necessary", failed: "the update failed" }[pst[b.host]] || pst[b.host]) : "")]));
+  $("gPush").disabled = ps.state === "run";
+  if (ps.state === "run") say($("gPushMsg"), true, "This board gives its firmware to the other boards. This takes approximately one minute for each board.");
+  else if (ps.state === "done" && $("gPushMsg").dataset.run) say($("gPushMsg"), !ps.boards.some(x => x.state === "failed"), ps.boards.some(x => x.state === "failed") ? "Complete, but not all boards took the firmware." : "Complete.");
+  $("gPushMsg").dataset.run = ps.state === "run" ? "1" : ($("gPushMsg").dataset.run || "");
+}
+async function groupTick() {
+  if (gBusy || !home || tab !== "group" || document.hidden) return;
+  gBusy = true;
+  try {
+    drawGroup();
+    for (const b of gAll()) {
+      if (tab !== "group") break;
+      const g = gSt[b.host]; if (!g) continue;
+      if (!b.fresh) { g.err = "not answering"; continue; }
+      try {
+        if (!g.info || !(g.n = ((g.n || 0) + 1) % 10)) { const i = await call(gBase(b.host) + "/api/info"); if (i && i.info) { g.info = i; g.cam = !!(i.info.sensors && i.info.sensors.camera); } }
+        const gen = g.gen, st = await call(gBase(b.host) + "/api/state");
+        if (gen !== g.gen) continue;
+        if (st && st.rules) { g.state = st; g.err = ""; } else g.err = (st && st.error) || "no answer";
+      } catch (e) { g.err = "no answer"; }
+      drawGroup();
+      if ($("gCam").checked && g.cam && !g.err) await new Promise(done => { const t = setTimeout(done, 4000); g.img.onload = g.img.onerror = () => { clearTimeout(t); done(); }; g.img.src = gBase(b.host) + "/api/frame.jpg?" + Date.now(); });
+    }
+  } finally { gBusy = false; }
+}
+$("gCam").onchange = drawGroup;
+$("gPush").onclick = async () => {
+  let r; try { r = await call("/api/home/push", {}); } catch (e) { r = { error: "no answer from the board" }; }
+  if (r.ok) $("gPushMsg").dataset.run = "1";
+  say($("gPushMsg"), r.ok, r.ok ? "Started." : "Not started: " + (r.error || "no answer")); loadHome();
+};
 
 // ---- eye ----
 const EW = 40, EH = 30, eyeSmall = el("canvas", { width: EW, height: EH });
@@ -1099,7 +1248,7 @@ function usFlag() {
   return s + "</g></svg>";
 }
 document.getElementById("flag").innerHTML = usFlag();
-refresh(); loadHome(); setInterval(refresh, 5000); setInterval(eyeTick, 250); setInterval(tick, 1000); setInterval(loadHome, 2500);
+refresh(); loadHome(); setInterval(refresh, 5000); setInterval(eyeTick, 250); setInterval(tick, 1000); setInterval(loadHome, 2500); setInterval(groupTick, 1000);
 setInterval(() => { if (tab === "devices" && !document.hidden) loadDevs(); }, 5000);
 </script>
 </body>

@@ -39,7 +39,8 @@ builds/<board>/<idea>.json        the ESP Web Tools manifest joining the two
 ```
 
 The firmware (`builds/firmware.bin`) is the same for each board. `<board>` is the type of board, and it selects only
-the model: `xiao_sense` has a microphone, `s3cam` has no microphone.
+the model: `xiao_sense` has a microphone, `s3cam` has no microphone. The types `mic_only` and `plain` are for a board
+without a camera: their packages tell the firmware not to look for a camera.
 
 An idea build is different from the base model only in its rules. Thus `decidio install <idea> --port COMx` gives the
 same result. Another way is to install a build and select ideas on the page of the board.
