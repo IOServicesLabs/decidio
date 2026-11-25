@@ -1,8 +1,9 @@
-// Alerts: when a rule fires, a short message goes to Telegram, to a webhook and/or to an MQTT broker.
+// Alerts: when a rule fires, a short message goes to Telegram, to a webhook, to an MQTT broker and/or to ntfy.
 //
 // Everything is sent from this file's own task, fed by a queue, so a slow or dead network never delays a decision.
 // At most 20 messages a minute leave the board; what does not fit is dropped and counted. A message is text. A photo
-// (the 96x96 frame the model saw, doubled to 192x192) is attached only for rules that ask for one, and only to Telegram.
+// (the 96x96 frame the model saw, doubled to 192x192) is attached only for rules that ask for one, and only to Telegram
+// and ntfy. ntfy also gets the last clip of the microphone (a WAV file) for such a rule, as a second, quiet message.
 //
 // In a group of boards (home.c), one board sends the alerts of all of them. The other boards give it their alerts, and
 // it gets the photo of such an alert from that board's page (/api/frame.jpg, with the group's token).
@@ -13,7 +14,8 @@
 // the daily summary are never kept back.
 //
 // Settings (store.c): tg_token, tg_chat | hook_url, hook_hdr ("Name: value"), hook_fmt (json | text) |
-//                     mqtt_url (mqtt:// or mqtts://), mqtt_user, mqtt_pass | alert_window (seconds)
+//                     mqtt_url (mqtt:// or mqtts://), mqtt_user, mqtt_pass | ntfy_url (the topic's address), ntfy_tok
+//                     (an access token, optional) | alert_window (seconds)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +31,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "img_converters.h"
+#include "mbedtls/base64.h"
 #include "mqtt_client.h"
 #include "cJSON.h"
 #include "rt.h"
@@ -65,11 +68,12 @@ typedef struct {
 
 static struct {
     char tg_token[64], tg_chat[24], hook_url[200], hook_hdr[160], hook_fmt[8], mqtt_url[128], mqtt_user[48], mqtt_pass[64];
+    char ntfy_url[200], ntfy_tok[80];
 } s_cfg;
 static QueueHandle_t s_q;
 static volatile bool s_reload = true;
 static volatile bool s_busy;    // the task has a job in hand (rt_alert_idle)
-static tally_t s_tg, s_hook, s_mq;
+static tally_t s_tg, s_hook, s_mq, s_nt;
 static uint32_t s_dropped, s_handed, s_folded;
 static esp_mqtt_client_handle_t s_mqtt;
 static volatile bool s_mqtt_up;
@@ -206,15 +210,60 @@ uint8_t *rt_snapshot_jpg(size_t *len)
     return ok ? jpg : NULL;
 }
 
+static void put16(uint8_t *d, uint32_t v)
+{
+    d[0] = (uint8_t)v;
+    d[1] = (uint8_t)(v >> 8);
+}
+
+static void put32(uint8_t *d, uint32_t v)
+{
+    put16(d, v);
+    put16(d + 2, v >> 16);
+}
+
+// the last clip of the microphone (the clip the model hears) as a WAV file the caller frees (NULL: no microphone)
+uint8_t *rt_sound_wav(size_t *len)
+{
+    const int sr = rt_audio_rate(), n = rt_audio_clip();
+    if (sr <= 0 || n <= 0) {
+        return NULL;
+    }
+    const uint32_t data = (uint32_t)n * 2;
+    uint8_t *w = heap_caps_malloc(44 + data, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!w) {
+        return NULL;
+    }
+    if (!rt_audio_pcm((int16_t *)(w + 44), n)) {           // the microphone has not filled one clip yet
+        free(w);
+        return NULL;
+    }
+    memcpy(w, "RIFF", 4);
+    put32(w + 4, 36 + data);
+    memcpy(w + 8, "WAVEfmt ", 8);
+    put32(w + 16, 16);
+    put16(w + 20, 1);                                      // PCM
+    put16(w + 22, 1);                                      // mono
+    put32(w + 24, (uint32_t)sr);
+    put32(w + 28, (uint32_t)sr * 2);
+    put16(w + 32, 2);
+    put16(w + 34, 16);
+    memcpy(w + 36, "data", 4);
+    put32(w + 40, data);
+    *len = 44 + data;
+    return w;
+}
+
 #define MSG_LEN (BODY_LEN + 100)
 #define ESC_LEN (2 * MSG_LEN)
 #define POST_LEN (2 * ESC_LEN + 400)
 
-// the photo of an alert from another board: its frame now, from its page (the group's token opens it)
-static uint8_t *peer_jpg(const char *ip, size_t *len)
+// the photo (/api/frame.jpg) or the sound (/api/sound.wav) of an alert from another board: from its page now (the
+// group's token opens it). A board with older firmware has no sound.wav: then there is no sound.
+static uint8_t *peer_get(const char *ip, const char *path, size_t *len)
 {
-    char url[48];
-    snprintf(url, sizeof(url), "http://%s/api/frame.jpg", ip);
+    char url[64];
+    snprintf(url, sizeof(url), "http://%s%s", ip, path);
     const esp_http_client_config_t c = { .url = url, .timeout_ms = 4000, .buffer_size = 1024 };
     esp_http_client_handle_t h = esp_http_client_init(&c);
     if (!h) {
@@ -225,7 +274,7 @@ static uint8_t *peer_jpg(const char *ip, size_t *len)
     *len = 0;
     if (esp_http_client_open(h, 0) == ESP_OK) {
         const int64_t cl = esp_http_client_fetch_headers(h);
-        if (esp_http_client_get_status_code(h) == 200 && cl > 0 && cl < 65536) {
+        if (esp_http_client_get_status_code(h) == 200 && cl > 0 && cl < 262144) {
             jpg = heap_caps_malloc((size_t)cl, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             int got = 0, n;
             while (jpg && got < cl && (n = esp_http_client_read(h, (char *)jpg + got, (int)cl - got)) > 0) {
@@ -266,7 +315,7 @@ static void telegram(const job_t *j, rt_alert_result_t *r)
     uint8_t *jpg = NULL;
     size_t jl = 0;
     if (j->photo) {
-        jpg = j->remote ? peer_jpg(j->ip, &jl) : rt_snapshot_jpg(&jl);
+        jpg = j->remote ? peer_get(j->ip, "/api/frame.jpg", &jl) : rt_snapshot_jpg(&jl);
     }
     if (!jpg) {
         snprintf(url, sizeof(url), "https://api.telegram.org/bot%s/sendMessage", s_cfg.tg_token);
@@ -328,6 +377,104 @@ static void webhook(const job_t *j, rt_alert_result_t *r)
              "\"p\":%.3f,\"time\":%lld}",
              e, e, j->host, j->label, j->rule, j->on ? "on" : "off", j->p, (long long)j->t);
     http_post(s_cfg.hook_url, "application/json", s_cfg.hook_hdr, body, r);
+}
+
+// A header value for ntfy: as it is when it is printable ASCII on one line, else as an RFC 2047 word ("=?UTF-8?B?...?="),
+// which ntfy decodes. That keeps line breaks and letters outside ASCII. A text too long for dst is cut.
+static void hdr_val(char *dst, size_t cap, const char *src)
+{
+    bool plain = true;
+    for (const unsigned char *c = (const unsigned char *)src; *c; c++) {
+        if (*c < 0x20 || *c > 0x7e) {
+            plain = false;
+            break;
+        }
+    }
+    if (plain) {
+        strlcpy(dst, src, cap);
+        return;
+    }
+    dst[0] = 0;
+    if (cap < 20) {
+        return;
+    }
+    size_t n = strlen(src), out = 0;
+    const size_t most = (cap - 13) / 4 * 3;
+    if (n > most) {
+        n = most;
+    }
+    memcpy(dst, "=?UTF-8?B?", 10);
+    if (mbedtls_base64_encode((unsigned char *)dst + 10, cap - 12, &out, (const unsigned char *)src, n) != 0) {
+        dst[0] = 0;
+        return;
+    }
+    memcpy(dst + 10 + out, "?=", 3);
+}
+
+// one message to the ntfy topic: the text alone (POST, the text is the body), or a file with the text in a header (PUT)
+static void ntfy_send(const char *title, const char *msg, int prio, const char *tags, const char *fname, const char *ctype,
+                      const uint8_t *data, size_t len, rt_alert_result_t *r)
+{
+    const int64_t t0 = esp_timer_get_time();
+    memset(r, 0, sizeof(*r));
+    esp_http_client_handle_t h = http_open(s_cfg.ntfy_url, fname ? HTTP_METHOD_PUT : HTTP_METHOD_POST, r);
+    if (!h) {
+        snprintf(r->detail, sizeof(r->detail), "bad address");
+        return;
+    }
+    char v[160];
+    hdr_val(v, sizeof(v), title);
+    esp_http_client_set_header(h, "Title", v);
+    snprintf(v, sizeof(v), "%d", prio);
+    esp_http_client_set_header(h, "Priority", v);
+    esp_http_client_set_header(h, "Tags", tags);
+    if (s_cfg.ntfy_tok[0]) {
+        snprintf(v, sizeof(v), "Bearer %s", s_cfg.ntfy_tok);
+        esp_http_client_set_header(h, "Authorization", v);
+    }
+    if (fname) {
+        hdr_val(s_esc, 880, msg);                          // one header line fits in the 1024-byte send buffer
+        esp_http_client_set_header(h, "Message", s_esc);
+        esp_http_client_set_header(h, "Filename", fname);
+        esp_http_client_set_header(h, "Content-Type", ctype);
+        esp_http_client_set_post_field(h, (const char *)data, (int)len);
+    } else {
+        esp_http_client_set_header(h, "Content-Type", "text/plain; charset=utf-8");
+        esp_http_client_set_post_field(h, msg, (int)strlen(msg));
+    }
+    http_done(h, esp_http_client_perform(h), t0, r);
+}
+
+// ntfy: the alert, with the photo for a rule that asks for one; then the sound of the microphone as a quiet second message
+static void ntfy(const job_t *j, rt_alert_result_t *r)
+{
+    char *msg = s_msg;
+    line(msg, MSG_LEN, j);
+    const char *title = j->label[0] ? j->label : j->host;
+    const int prio = j->urgent ? 5 : (j->on && !j->grouped && !j->test) ? 4 : 3;
+    const char *tags = j->urgent ? "rotating_light" : j->on ? "bell" : "white_check_mark";
+    uint8_t *jpg = NULL;
+    size_t jl = 0;
+    if (j->photo) {
+        jpg = j->remote ? peer_get(j->ip, "/api/frame.jpg", &jl) : rt_snapshot_jpg(&jl);
+    }
+    ntfy_send(title, msg, prio, tags, jpg ? "photo.jpg" : NULL, "image/jpeg", jpg, jl, r);
+    free(jpg);
+    if (!r->ok || !j->photo) {
+        return;
+    }
+    size_t wl = 0;
+    uint8_t *wav = j->remote ? peer_get(j->ip, "/api/sound.wav", &wl) : rt_sound_wav(&wl);
+    if (!wav) {
+        return;                                            // no microphone on that board: the alert went out without sound
+    }
+    rt_alert_result_t s;
+    ntfy_send(title, "The sound at this alert", 2, "loud_sound", "sound.wav", "audio/wav", wav, wl, &s);
+    free(wav);
+    if (!s.ok) {                                           // the alert itself arrived: no second try for the sound alone
+        snprintf(r->detail, sizeof(r->detail), "sound not sent: %d %.60s", s.status, s.detail);
+        ESP_LOGW(TAG, "%s: %s", j->rule, r->detail);
+    }
 }
 
 static void on_mqtt(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -402,6 +549,8 @@ static void load(void)
     rt_store_get("hook_url", s_cfg.hook_url, sizeof(s_cfg.hook_url));
     rt_store_get("hook_hdr", s_cfg.hook_hdr, sizeof(s_cfg.hook_hdr));
     rt_store_get("hook_fmt", s_cfg.hook_fmt, sizeof(s_cfg.hook_fmt));
+    rt_store_get("ntfy_url", s_cfg.ntfy_url, sizeof(s_cfg.ntfy_url));
+    rt_store_get("ntfy_tok", s_cfg.ntfy_tok, sizeof(s_cfg.ntfy_tok));
     char old[sizeof(s_cfg.mqtt_url) + sizeof(s_cfg.mqtt_user) + sizeof(s_cfg.mqtt_pass)], now[sizeof(old)];
     snprintf(old, sizeof(old), "%s|%s|%s", s_cfg.mqtt_url, s_cfg.mqtt_user, s_cfg.mqtt_pass);
     rt_store_get("mqtt_url", s_cfg.mqtt_url, sizeof(s_cfg.mqtt_url));
@@ -474,6 +623,9 @@ static void send_all(const job_t *j, rt_alert_result_t *r)
     }
     if (s_cfg.mqtt_url[0]) {
         deliver(j, mqtt_send, &s_mq, r);
+    }
+    if (s_cfg.ntfy_url[0]) {
+        deliver(j, ntfy, &s_nt, r);
     }
 }
 
@@ -639,6 +791,12 @@ static void alert_task(void *arg)
                 } else {
                     snprintf(r.detail, sizeof(r.detail), "broker not set");
                 }
+            } else if (!strcmp(j.dest, "ntfy")) {
+                if (s_cfg.ntfy_url[0]) {
+                    deliver(&j, ntfy, &s_nt, &r);
+                } else {
+                    snprintf(r.detail, sizeof(r.detail), "topic not set");
+                }
             }
         } else if (!j.remote && !(j.photo && rt_power_on()) && handoff(&j)) {
             // (low power: a board that sleeps cannot give the sender its photo, so it sends photo alerts itself)
@@ -720,7 +878,7 @@ bool rt_alert_idle(void)
 
 bool rt_alert_ready(void)
 {
-    return (s_cfg.tg_token[0] && s_cfg.tg_chat[0]) || s_cfg.hook_url[0] || s_cfg.mqtt_url[0];
+    return (s_cfg.tg_token[0] && s_cfg.tg_chat[0]) || s_cfg.hook_url[0] || s_cfg.mqtt_url[0] || s_cfg.ntfy_url[0];
 }
 
 // from the home task: never waits
@@ -750,7 +908,7 @@ bool rt_alert_from_peer(const char *host, const char *label, const char *ip, con
 int rt_alert_share(char *dst, size_t cap)
 {
     static const char *KEYS[] = { "tg_token", "tg_chat", "hook_url", "hook_hdr", "hook_fmt", "mqtt_url", "mqtt_user",
-                                  "mqtt_pass", "alert_window" };
+                                  "mqtt_pass", "ntfy_url", "ntfy_tok", "alert_window" };
     char ips[8][16], hosts[8][20];
     const int m = rt_home_members(ips, hosts, 8);
     cJSON *b = cJSON_CreateObject();
@@ -812,6 +970,7 @@ bool rt_alert_test(const char *dest, rt_alert_result_t *out)
     j->out = &res;
     j->done = done;
     strlcpy(j->dest, dest, sizeof(j->dest));
+    j->photo = !strcmp(dest, "ntfy");                     // the ntfy test shows the photo and the sound, when the board has them
     strlcpy(j->rule, "test", sizeof(j->rule));
     strlcpy(j->text, "Test alert from your decidio board", sizeof(j->text));
     strlcpy(j->host, rt_wifi_host(), sizeof(j->host));
@@ -832,12 +991,14 @@ int rt_alert_json(char *dst, size_t cap)
     return snprintf(dst, cap,
                     "{\"telegram\":{\"set\":%s,\"chat\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
                     "\"webhook\":{\"set\":%s,\"format\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
-                    "\"mqtt\":{\"set\":%s,\"connected\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},\"dropped\":%lu,"
+                    "\"mqtt\":{\"set\":%s,\"connected\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
+                    "\"ntfy\":{\"set\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},\"dropped\":%lu,"
                     "\"window\":%d,\"handed\":%lu,\"grouped\":%lu}",
                     s_cfg.tg_token[0] && s_cfg.tg_chat[0] ? "true" : "false", s_cfg.tg_chat, (unsigned long)s_tg.sent,
                     (unsigned long)s_tg.failed, s_tg.last, s_cfg.hook_url[0] ? "true" : "false",
                     s_cfg.hook_fmt[0] ? s_cfg.hook_fmt : "json", (unsigned long)s_hook.sent, (unsigned long)s_hook.failed,
                     s_hook.last, s_cfg.mqtt_url[0] ? "true" : "false", s_mqtt_up ? "true" : "false",
-                    (unsigned long)s_mq.sent, (unsigned long)s_mq.failed, s_mq.last, (unsigned long)s_dropped, s_window_s,
+                    (unsigned long)s_mq.sent, (unsigned long)s_mq.failed, s_mq.last, s_cfg.ntfy_url[0] ? "true" : "false",
+                    (unsigned long)s_nt.sent, (unsigned long)s_nt.failed, s_nt.last, (unsigned long)s_dropped, s_window_s,
                     (unsigned long)s_handed, (unsigned long)s_folded);
 }

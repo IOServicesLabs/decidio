@@ -264,6 +264,18 @@
               <p class="msg result" data-result="mqtt" role="status" aria-live="polite"></p>
             </fieldset>
 
+            <fieldset class="dest" data-dest="ntfy">
+              <legend>ntfy (push to a phone)</legend>
+              <label for="ntfy_url">Topic address (http:// or https://)</label>
+              <input id="ntfy_url" type="text" inputmode="url" autocomplete="off" placeholder="Not changed, for example https://ntfy.sh/a-long-random-name" spellcheck="false">
+              <label for="ntfy_tok">Access token (optional)</label>
+              <input id="ntfy_tok" type="password" autocomplete="off" placeholder="Not changed">
+              <p class="hint">Install the ntfy app on the phone and subscribe to the same topic. For a rule with a photo, the alert has the camera picture and the sound of the microphone. On ntfy.sh, each person who knows the topic name can read the alerts: use a long random name, or your own server.</p>
+              <label class="check"><input type="checkbox" data-remove="ntfy"> Remove the ntfy settings from the board</label>
+              <div class="row"><button type="button" class="btn small" data-test="ntfy">Send test</button></div>
+              <p class="msg result" data-result="ntfy" role="status" aria-live="polite"></p>
+            </fieldset>
+
             <div class="row"><button type="submit" class="btn primary" id="saveAlerts">Save alerts</button></div>
           </form>
           <p class="msg" id="alertMsg" role="status" aria-live="polite"></p>

@@ -15,7 +15,7 @@ static const char *TAG = "mic";
 static i2s_chan_handle_t s_rx;
 static SemaphoreHandle_t s_lock;
 static bool s_do_mel;
-static int s_hop, s_win, s_frames, s_mels, s_hist;
+static int s_hop, s_win, s_frames, s_mels, s_hist, s_sr, s_clip;
 static int16_t *s_pcm;            // history ring, s_hist samples
 static uint32_t s_pcm_head, s_pcm_total;
 static float *s_mel;              // ring s_frames x s_mels
@@ -158,6 +158,8 @@ esp_err_t rt_audio_start(int sr, int clip, bool mel)
     };
     ESP_RETURN_ON_ERROR(i2s_channel_init_pdm_rx_mode(s_rx, &pc), TAG, "pdm init");
     ESP_RETURN_ON_ERROR(i2s_channel_enable(s_rx), TAG, "i2s enable");
+    s_sr = sr;
+    s_clip = clip;
     s_lock = xSemaphoreCreateMutex();
     ESP_RETURN_ON_FALSE(s_lock, ESP_ERR_NO_MEM, TAG, "mutex");
     return xTaskCreatePinnedToCore(mic_task, "mic", 4096, NULL, 7, NULL, 0) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
@@ -197,6 +199,16 @@ bool rt_audio_pcm(int16_t *dst, int n)
     }
     xSemaphoreGive(s_lock);
     return ok;
+}
+
+int rt_audio_rate(void)
+{
+    return s_lock ? s_sr : 0;
+}
+
+int rt_audio_clip(void)
+{
+    return s_lock ? s_clip : 0;
 }
 
 uint32_t rt_audio_mel_seq(void)

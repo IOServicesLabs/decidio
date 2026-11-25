@@ -148,6 +148,8 @@ esp_err_t rt_audio_start(int sr, int clip, bool mel);
 bool rt_audio_mel(float *dst, uint32_t *seq);          // n_frames x n_mels, oldest first
 uint32_t rt_audio_mel_seq(void);                       // mel frames produced so far (cheap, no copy)
 bool rt_audio_pcm(int16_t *dst, int n);                // last n samples
+int rt_audio_rate(void);                               // samples a second, 0 = the microphone does not run
+int rt_audio_clip(void);                               // samples in the history (the model's clip)
 uint32_t rt_audio_seq(void);
 
 // mel.c
@@ -333,7 +335,7 @@ int rt_push_json(char *dst, size_t cap);               // {"state":"idle|run|don
 void rt_web_start(void);
 void rt_web_auth_reload(void);                         // the page password or the group password changed
 
-// alert.c - messages to Telegram, a webhook and MQTT, sent from their own task
+// alert.c - messages to Telegram, a webhook, MQTT and ntfy, sent from their own task
 typedef struct {
     bool ok;
     int status;                 // HTTP status, 0 when the request never got an answer
@@ -342,6 +344,7 @@ typedef struct {
 } rt_alert_result_t;
 void rt_alert_start(void);
 uint8_t *rt_snapshot_jpg(size_t *len);                 // the model's current frame, 192x192; caller frees
+uint8_t *rt_sound_wav(size_t *len);                    // the last clip of the microphone as a WAV file; caller frees
 void rt_alert_reload(void);                            // settings changed
 void rt_alert_event(const char *rule, const char *text, bool on, float p, bool photo, bool urgent);
 bool rt_alert_ready(void);                             // at least one destination is set
@@ -350,7 +353,7 @@ bool rt_alert_idle(void);                              // nothing waits to be se
 bool rt_alert_from_peer(const char *host, const char *label, const char *ip, const char *rule, const char *text, bool on,
                         float p, bool photo, bool urgent, long long t);
 int rt_alert_share(char *dst, size_t cap);             // copy this board's alert settings to the group (web.c)
-bool rt_alert_test(const char *dest, rt_alert_result_t *out);    // "telegram" | "webhook" | "mqtt" | "probe"; waits
+bool rt_alert_test(const char *dest, rt_alert_result_t *out);    // "telegram" | "webhook" | "mqtt" | "ntfy" | "probe"; waits
 int rt_alert_json(char *dst, size_t cap);              // what is configured, and counters (never the secrets)
 bool rt_dev_test(int slot, const char *what, rt_alert_result_t *out, char *dps, size_t dps_cap);   // devices.c: on | off | status
 bool rt_dev_try(const struct cJSON *j, rt_alert_result_t *out, char *dps, size_t dps_cap);  // devices.c: a device not saved yet

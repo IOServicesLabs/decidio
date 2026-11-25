@@ -186,6 +186,9 @@ class DemoBoard {
     } else if (dest === "mqtt") {
       if (has("mqtt_url")) Object.assign(r, { ok: true, status: 0, ms: 118 });
       else r.detail = "broker not set";
+    } else if (dest === "ntfy") {
+      if (has("ntfy_url")) Object.assign(r, { ok: true, status: 200, ms: 702 });
+      else r.detail = "topic not set";
     }
     this.line('{"alert_test":{"ok":' + r.ok + ',"status":' + r.status + ',"ms":' + r.ms + ',"detail":"' + r.detail +
       '"},"heap_internal":61234,"heap_min":40211}');

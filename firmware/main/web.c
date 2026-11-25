@@ -8,14 +8,16 @@
 //   GET  /api/scan       networks in range (setup)
 //   POST /api/wifi       {"ssid","pass"} | {"forget":true}
 //   POST /api/camera     {"rotate":0|90|180|270}: turn the camera picture
-//   POST /api/alerts     any of tg_token tg_chat hook_url hook_hdr hook_fmt mqtt_url mqtt_user mqtt_pass alert_window
+//   POST /api/alerts     any of tg_token tg_chat hook_url hook_hdr hook_fmt mqtt_url mqtt_user mqtt_pass ntfy_url ntfy_tok
+//                        alert_window
 //   POST /api/alerts/share  write this board's alert settings on the other boards of the group -> {"boards":[...]}
-//   POST /api/test       {"dest":"telegram|webhook|mqtt|probe"} -> {"ok","status","ms","detail"}
+//   POST /api/test       {"dest":"telegram|webhook|mqtt|ntfy|probe"} -> {"ok","status","ms","detail"}
 //   GET  /api/state      the last decision, the rules and whether each is on, the radio score
 //   POST /api/rules      a JSON array of rules (rules.c) | {"reset":true}: back to the model package's own
 //   POST /api/radio      {"motion":true|false}
 //   POST /api/time       {"tz":"<+01>-1"} (POSIX time zone, sent by the page from the browser's clock), {"summary_at":1260}
 //   GET  /api/frame.jpg  what the camera sees now (to aim it)
+//   GET  /api/sound.wav  the last clip of the microphone (for the alert of another board of the group)
 //   GET  /api/recipes    the ideas built into this firmware (recipes.json), each with its rules
 //   POST /api/model      a model package (model.dcd) as the request body: written to flash, then the board restarts
 //   POST /api/firmware   an app image (decidio_rt.bin) as the request body: written to the other app slot, then restart
@@ -287,8 +289,8 @@ static esp_err_t h_wifi(httpd_req_t *req)
 static esp_err_t h_alerts(httpd_req_t *req)
 {
     static const char *KEYS[] = { "tg_token", "tg_chat", "hook_url", "hook_hdr", "hook_fmt", "mqtt_url", "mqtt_user",
-                                  "mqtt_pass", "alert_window" };
-    static const uint8_t MAXLEN[] = { 63, 23, 199, 159, 7, 127, 47, 63, 4 };
+                                  "mqtt_pass", "ntfy_url", "ntfy_tok", "alert_window" };
+    static const uint8_t MAXLEN[] = { 63, 23, 199, 159, 7, 127, 47, 63, 199, 79, 4 };
     if (!allowed(req)) {
         return ESP_OK;
     }
@@ -342,9 +344,9 @@ static esp_err_t h_test(httpd_req_t *req)
     }
     cJSON *j = body(req);
     const char *d = j ? str(j, "dest") : NULL;
-    if (!d || (strcmp(d, "telegram") && strcmp(d, "webhook") && strcmp(d, "mqtt") && strcmp(d, "probe"))) {
+    if (!d || (strcmp(d, "telegram") && strcmp(d, "webhook") && strcmp(d, "mqtt") && strcmp(d, "ntfy") && strcmp(d, "probe"))) {
         cJSON_Delete(j);
-        return bad(req, "dest: telegram | webhook | mqtt | probe");
+        return bad(req, "dest: telegram | webhook | mqtt | ntfy | probe");
     }
     rt_alert_result_t r;
     rt_alert_test(d, &r);
@@ -475,6 +477,23 @@ static esp_err_t h_frame(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     const esp_err_t err = httpd_resp_send(req, (const char *)jpg, n);
     free(jpg);
+    return err;
+}
+
+static esp_err_t h_sound(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    size_t n = 0;
+    uint8_t *wav = rt_sound_wav(&n);
+    if (!wav) {
+        return httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "no microphone sound");
+    }
+    httpd_resp_set_type(req, "audio/wav");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    const esp_err_t err = httpd_resp_send(req, (const char *)wav, n);
+    free(wav);
     return err;
 }
 
@@ -1115,6 +1134,7 @@ void rt_web_start(void)
         { .uri = "/api/time", .method = HTTP_POST, .handler = h_time },
         { .uri = "/api/camera", .method = HTTP_POST, .handler = h_camera },
         { .uri = "/api/frame.jpg", .method = HTTP_GET, .handler = h_frame },
+        { .uri = "/api/sound.wav", .method = HTTP_GET, .handler = h_sound },
         { .uri = "/api/recipes", .method = HTTP_GET, .handler = h_recipes },
         { .uri = "/api/model", .method = HTTP_POST, .handler = h_model },
         { .uri = "/api/firmware", .method = HTTP_POST, .handler = h_firmware },

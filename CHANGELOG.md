@@ -4,6 +4,12 @@
 
 ### Added
 
+- Alerts: a new destination, ntfy. It sends push messages to the ntfy app on a phone, through `ntfy.sh` or a server of
+  your own, with an optional access token. For a rule with a photo, the alert has the camera picture, and a second,
+  quiet message has the last clip of the microphone as a WAV file. The Alerts tab, step 4 of the installer website and
+  the console (`alert test ntfy`) have it.
+- Firmware: the route `GET /api/sound.wav`, the last clip of the microphone.
+
 - Devices tab: a new card **Devices heard on the network**. It shows a name for each Smart Life device that the board
   hears. The board asks the router (DNS), then the DNS server from DHCP, then mDNS.
 - Devices tab: **Try** switches a heard device before you save it. Type the local key and click **Blink**, **On**,

@@ -97,12 +97,12 @@ the command gives, with a time limit. The next command goes out after the answer
 | **Save Wi-Fi** | `wifi "<name>" "<password>"`, then `wifi` each 2 seconds, a maximum of 15 times (as `decidio wifi`) | `{"ok":"wifi"}` (`{"error":"wifi: ..."}` comes first if the board refuses), then the state `online` |
 | **Save page password** | `alert set page_pass "<password>"` (`""` removes the password) | `{"ok":"alert"}` |
 | **Save alerts** | `alert set <key> "<value>"` for each field that the person changed; `alert set <key> ""` for each key of a destination that the person removes | `{"ok":"alert"}` for each command |
-| **Send test** | `alert test telegram`, `alert test webhook` or `alert test mqtt` | `{"alert_test":{"ok":...,"status":...,"ms":...,"detail":"..."}}`, a maximum of 40 seconds |
+| **Send test** | `alert test telegram`, `alert test webhook`, `alert test mqtt` or `alert test ntfy` | `{"alert_test":{"ok":...,"status":...,"ms":...,"detail":"..."}}`, a maximum of 40 seconds |
 | **Restart the board** | `reboot`, then `info` | The `{"info":...}` line that the board prints at its start. If the USB port goes away, the page opens it again when it comes back |
 
 The alert keys and their maximum lengths (from `firmware/main/alert.c` and `web.c`): `tg_token` 63, `tg_chat` 23,
 `hook_url` 199, `hook_hdr` 159 (`Name: value`), `hook_fmt` (`json` or `text`), `mqtt_url` 127 (`mqtt://` or `mqtts://`),
-`mqtt_user` 47, `mqtt_pass` 63. An empty value removes the key from the board (`rt_store_set` in `store.c`).
+`mqtt_user` 47, `mqtt_pass` 63, `ntfy_url` 199, `ntfy_tok` 79. An empty value removes the key from the board (`rt_store_set` in `store.c`).
 
 The board does not tell the values of its settings. Thus an empty field on the page keeps the value that is on the
 board.
@@ -124,7 +124,7 @@ board**. The alert settings apply at once: `alert set` calls `rt_alert_reload()`
 The page does not offer the room name or the group secret. Use the page of the board for them.
 
 The console log shows each line from the board and each command from the page. The page replaces each value that it
-sent for the Wi-Fi password, the page password, `tg_token`, `hook_url`, `hook_hdr`, `mqtt_url` and `mqtt_pass` with
+sent for the Wi-Fi password, the page password, `tg_token`, `hook_url`, `hook_hdr`, `mqtt_url`, `mqtt_pass`, `ntfy_url` and `ntfy_tok` with
 `[hidden]`. This applies to the commands and to the lines from the board (for values of 4 characters or more). The
 model answers (about 4 lines each second) are hidden until the person selects them.
 

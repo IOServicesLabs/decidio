@@ -14,7 +14,7 @@
 //   info | run | stop | print <ms> | collect <ms> | collect off | orient <0-3|auto> | profile on|off | reboot
 //   radio scan | radio <channel> [sender] | radio off      (radio.c)
 //   wifi | wifi "<network name>" "<password>" | wifi forget | wifi off      (wifi.c)
-//   alert test telegram|webhook|mqtt|probe | alert set <key> <value>        (alert.c; keys as in web.c)
+//   alert test telegram|webhook|mqtt|ntfy|probe | alert set <key> <value>   (alert.c; keys as in web.c)
 //   power | power on|off | power stay|go | power wakes <n>          low-power mode (power.c)
 //   mem
 // An argument with spaces goes in double quotes.

@@ -58,9 +58,9 @@ error as it does on a correct answer.**
 
 | Data | Destination |
 |---|---|
-| Alert text | Only the destinations that you entered (Telegram, webhook, MQTT) |
-| A camera picture | Only Telegram, and only for a rule where you select **with a photo** |
+| Alert text | Only the destinations that you entered (Telegram, webhook, MQTT, ntfy) |
+| A camera picture | Only Telegram and ntfy, and only for a rule where you select **with a photo** |
 | Commands to a Smart Life device | That device on your Wi-Fi. They do not go to the internet. |
-| Sound | Nothing. The board does not send sound. |
+| Sound | Only ntfy, and only for a rule where you select **with a photo**: the last clip of the microphone (1 second for most models). The **Send test** button of ntfy also sends a picture and a clip. |
 
 README.md tells you more in the sections "What leaves the board" and "Warnings".

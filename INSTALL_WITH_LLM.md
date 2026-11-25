@@ -147,7 +147,7 @@ Tell the user these items, in your own words:
 3. The address of the page of the board (`http://decidio-xxxx.local`, or the address from step 6).
 4. Set a password for the page immediately, on the Wi-Fi tab or in step 4 of the installer website. Until then, each
    person on the network can open the page and see the camera picture.
-5. For alerts: the Alerts tab has Telegram, webhook and MQTT fields, each with a test button. README.md has the
+5. For alerts: the Alerts tab has Telegram, webhook, MQTT and ntfy fields, each with a test button. README.md has the
    Telegram procedure.
 6. The idea is not a safety device. The user must test it in the room where it operates and adjust the threshold on
    the Ideas tab.

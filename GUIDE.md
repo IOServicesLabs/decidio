@@ -6,7 +6,7 @@ firmware. To put a ready-made idea on a board, start with [README.md](README.md)
 
 decidio makes small typed-decision models for the ESP32-S3. You write the questions. An int8 model on the chip
 answers them from the **camera, the microphone or both**, many times each second. The board then acts on the answers.
-It can set GPIO pins, write event lines to USB, or send an alert over Wi-Fi to Telegram, a webhook or MQTT. The model
+It can set GPIO pins, write event lines to USB, or send an alert over Wi-Fi to Telegram, a webhook, MQTT or ntfy. The model
 does not generate text: each question has a fixed set of options, and the model gives a probability for each option.
 
 ```
@@ -113,7 +113,7 @@ To open the page of the board, do one of these steps:
 | Ideas | Shows the rules that operate now, with their thresholds, times, pin, device and alert. Adds any of the 63 ideas, or a rule of your own |
 | Devices | Shows the Smart Life (Tuya) devices that this board switches. Adds a device (id and local key), tests it, and makes a light follow people |
 | Boards | Sets the room of this board and, if you want one, the group password. Shows the other boards on the network, their rules and how this board hears them, and adds them to the group |
-| Alerts | Sets a Telegram bot, a webhook and MQTT. The webhook sends JSON or plain text, with one optional header, for example to ntfy, Discord, Slack or Home Assistant. Each one has a test button |
+| Alerts | Sets a Telegram bot, a webhook, MQTT and ntfy. The webhook sends JSON or plain text, with one optional header, for example to Discord, Slack or Home Assistant. ntfy gets the camera picture and the sound of the microphone for a rule with a photo. Each one has a test button |
 | Radio | Shows the live movement score from the signal of your router, to help you select a threshold |
 | Wi-Fi | Changes the network. Sets a password for the page |
 | System | Sets the time of the daily summary. Uploads a model package or new firmware. Shows the sensors that the board found (**Detect again**). Sets input pins and does an I2C scan. Restarts the board. Erases the settings (**Erase all settings**) |
@@ -149,6 +149,10 @@ specific to one home.
 |---|---|
 | MQTT topic for events | `decidio/<name>/event/<rule>` |
 | MQTT topic for the status | `decidio/<name>/status`, kept at `online` or `offline` |
+| ntfy settings | `ntfy_url` (the address of the topic), `ntfy_tok` (an access token, optional, sent as `Authorization: Bearer`) |
+| ntfy message for a rule with a photo | The text with the camera picture (`photo.jpg`, 192 x 192). Then the last clip of the microphone (`sound.wav`, 16-bit mono, at the rate of the model) with priority 2 |
+| ntfy priority | 5 for an urgent rule, 4 when a rule goes on, 3 when it goes off, for a grouped message and for a test |
+| Sound of the microphone | `GET /api/sound.wav` on the page of the board. The board that sends the alerts of a group gets it there |
 | Alerts that leave the board | A maximum of 20 each minute |
 | Tries for each alert | 3 |
 | Shortest time between two alerts of one rule | `cooldown_s`, set for each rule |
@@ -785,7 +789,7 @@ Console commands (one command on each line):
 | `wifi "<network>" "<password>"` | Joins a network |
 | `wifi forget` | Forgets the network |
 | `wifi off` | Forgets the network and keeps Wi-Fi off after the next start |
-| `alert test <telegram\|webhook\|mqtt>` | Sends a test alert |
+| `alert test <telegram\|webhook\|mqtt\|ntfy>` | Sends a test alert |
 | `alert set <key> <value>` | Sets one alert setting |
 | `radio scan`, `radio <channel> [sender]`, `radio motion on\|off`, `radio off` | Radio sensing (refer to "Radio sensing" below) |
 | `board`, `board auto`, `board <profile>` | Refer to "One firmware, found at the start" above |

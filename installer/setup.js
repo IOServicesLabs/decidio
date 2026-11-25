@@ -10,7 +10,7 @@
 //   wifi "<ssid>" "<password>"   -> {"ok":"wifi"} ({"error":"wifi: .."} first when refused), then `wifi` is polled
 //   wifi                         -> {"wifi":{"state":..,"setup_open":..,"ip":..,"host":..,"rssi":..,"channel":..,"reason":..}}
 //   alert set <key> "<value>"    -> {"ok":"alert"} or {"error":".."}    an empty value removes the key (store.c)
-//   alert test telegram|webhook|mqtt -> {"alert_test":{"ok":..,"status":..,"ms":..,"detail":".."},..}  (up to 30 s)
+//   alert test telegram|webhook|mqtt|ntfy -> {"alert_test":{"ok":..,"status":..,"ms":..,"detail":".."},..}  (up to 30 s)
 //   reboot                       -> no answer; the board starts again and prints {"info":..} when it is ready
 //
 // Nothing typed here is stored by the page (no localStorage, no server). Secrets are masked in the console log.
@@ -199,8 +199,12 @@ const FIELDS = [
     re: /^mqtts?:\/\/\S+$/i, form: "The broker address starts with mqtt:// or mqtts:// and has no spaces." },
   { key: "mqtt_user", dest: "mqtt", label: "MQTT user", max: 47 },
   { key: "mqtt_pass", dest: "mqtt", label: "MQTT password", max: 63, secret: true },
+  { key: "ntfy_url", dest: "ntfy", label: "ntfy topic address", max: 199, secret: true, trim: true,
+    re: /^https?:\/\/[^\s/]+\/[^\s/?#]+$/i, form: "The topic address has the form https://ntfy.sh/a-long-random-name, with no spaces." },
+  { key: "ntfy_tok", dest: "ntfy", label: "ntfy access token", max: 79, secret: true, trim: true,
+    re: /^\S+$/, form: "The access token has no spaces, for example tk_abc123." },
 ];
-const DESTS = { telegram: "Telegram", webhook: "Webhook", mqtt: "MQTT" };
+const DESTS = { telegram: "Telegram", webhook: "Webhook", mqtt: "MQTT", ntfy: "ntfy" };
 
 const BOARD_EXTRA = {
   "s3cam-lcd": "ESP32-S3-CAM with a display connector (camera, no microphone)",
@@ -683,6 +687,7 @@ async function start({ demo, mobile, boardName, version }) {
     "token or chat id not set": " Save the bot token and the chat ID first.",
     "address not set": " Save the webhook address first.",
     "broker not set": " Save the broker address first.",
+    "topic not set": " Save the ntfy topic address first.",
     "not connected to the broker": " Make sure that the broker address, the user and the password are correct.",
   };
 

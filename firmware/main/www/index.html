@@ -78,7 +78,7 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <h2>Alerts of the group</h2>
       <p class="note" style="margin-top:0" id="gSender"></p>
       <div id="gAlerts"></div><div class="msg" id="gAlertMsg"></div>
-      <p class="note">Each rule of each board is shown here. A change to a check box is saved on that board immediately. <b>Set up the alerts</b> opens the Alerts tab of that board, where you enter the Telegram, webhook and MQTT data and can copy them to all the boards. <b>Change the rules</b> opens its Ideas tab.</p>
+      <p class="note">Each rule of each board is shown here. A change to a check box is saved on that board immediately. <b>Set up the alerts</b> opens the Alerts tab of that board, where you enter the Telegram, webhook, MQTT and ntfy data and can copy them to all the boards. <b>Change the rules</b> opens its Ideas tab.</p>
     </div>
     <div class="card">
       <h2>Firmware of the group</h2>
@@ -245,6 +245,15 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <div class="msg" id="m-mqtt"></div>
       <p class="note">Topics: decidio/<span class="h"></span>/event/&lt;rule&gt; and decidio/<span class="h"></span>/status.</p>
     </div>
+    <div class="card">
+      <h2>ntfy (push to a phone)</h2>
+      <p class="note" style="margin-top:0">Install the ntfy app on the phone and subscribe to a topic. Enter the address of that topic here. For a rule with a photo, the alert has the camera picture, and a second, quiet message has the sound of the microphone.</p>
+      <label for="ntfy_url">Topic address, e.g. https://ntfy.sh/a-long-random-name</label><input id="ntfy_url" autocomplete="off" placeholder="unchanged">
+      <label for="ntfy_tok">Access token (optional, for a server that needs a login)</label><input id="ntfy_tok" type="password" autocomplete="off" placeholder="unchanged">
+      <div class="row"><button class="b" data-save="ntfy_url,ntfy_tok">Save</button><button class="b ghost" data-test="ntfy">Send test</button></div>
+      <div class="msg" id="m-ntfy"></div>
+      <p class="note">The test sends the camera picture and the sound now, if this board has a camera and a microphone. On the public server ntfy.sh, each person who knows the topic name can read the alerts: use a long random name, or your own server.</p>
+    </div>
     <div class="card"><h2>Fewer messages</h2>
       <p class="note" style="margin-top:0">The first alert goes out at once. The alerts in the next seconds are kept, and then go out together as one message. An alert of a rule marked <b>urgent</b> always goes out at once.</p>
       <label for="alert_window">Keep alerts for (seconds, 0 = send each alert at once)</label><input id="alert_window" type="number" min="0" max="3600" step="10" style="max-width:140px">
@@ -254,7 +263,7 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
         <p class="note" id="senderNote"></p>
         <div class="row"><button class="b ghost" id="shareAlerts">Use these alert settings on all boards in the group</button></div>
         <div class="msg" id="m-share"></div>
-        <p class="note">This copies the Telegram, webhook and MQTT settings of this board to the other boards of the group. If the board that sends the alerts stops, the next board can then send them.</p>
+        <p class="note">This copies the Telegram, webhook, MQTT and ntfy settings of this board to the other boards of the group. If the board that sends the alerts stops, the next board can then send them.</p>
       </div>
     </div>
     <div class="card"><h2>Connection</h2>
@@ -466,7 +475,7 @@ async function refresh() {
   drawSens();
   if (first) loadInputs();
   loadPower(false);
-  kv($("tally"), [["Telegram", line(a.telegram)], ["Webhook", line(a.webhook)], ["MQTT", line(a.mqtt) + (a.mqtt.set ? (a.mqtt.connected ? ", connected" : ", not connected") : "")], ["Dropped", a.dropped],
+  kv($("tally"), [["Telegram", line(a.telegram)], ["Webhook", line(a.webhook)], ["MQTT", line(a.mqtt) + (a.mqtt.set ? (a.mqtt.connected ? ", connected" : ", not connected") : "")], ...(a.ntfy ? [["ntfy", line(a.ntfy)]] : []), ["Dropped", a.dropped],
     ...(a.window !== undefined ? [["Kept and sent together", a.grouped], ["Given to the board that sends the alerts", a.handed]] : [])]);
   if (first) {
     $("tg_chat").value = a.telegram.chat; $("hook_fmt").value = a.webhook.format; $("alert_window").value = a.window ?? 60; $("sumAt").value = hhmm(d.summary_at);
@@ -582,7 +591,7 @@ function drawRules() {
       r.notify ? el("div", { className: "grid", style: "margin-top:6px" },
         field("Alert text", el("input", { value: r.text, maxLength: 71, placeholder: r.name, oninput: e => { r.text = e.target.value; dirty = true; } })),
         field("At most every (seconds)", num(r.cooldown_s, v => r.cooldown_s = Math.round(v), 10))) : "",
-      r.photo ? el("p", { className: "note", textContent: "With a photo: a picture from the camera leaves the board, to Telegram only." }) : "");
+      r.photo ? el("p", { className: "note", textContent: "With a photo: a picture from the camera leaves the board, to Telegram and ntfy. ntfy also gets the sound of the microphone." }) : "");
   }) : [el("p", { className: "note", style: "margin:0", textContent: "No rules yet. Add an idea below." })]));
   markStates();
 }
@@ -956,7 +965,7 @@ function drawGAlerts(all) {
   const s = home.sender === home.host ? home : home.boards.find(b => b.host === home.sender);
   $("gSender").textContent = !home.sender ? "No board of the group has a place to send alerts to. Set one up on one board, then copy it to the other boards on the Alerts tab of that board."
     : "The alerts of the whole group go out from " + label(s || { host: home.sender }) + (home.sender === home.host ? " (this board)." : ".") + " The other boards give their alerts to it.";
-  const tally = a => a && [a.telegram, a.webhook, a.mqtt].map(x => [x.set, x.sent, x.failed]);
+  const tally = a => a && [a.telegram, a.webhook, a.mqtt, a.ntfy].filter(Boolean).map(x => [x.set, x.sent, x.failed]);
   const sig = JSON.stringify(all.map(b => { const g = gSt[b.host], r = g.state && g.state.rules; return [b.host, b.room, home.sender, g.cam, tally(g.info && g.info.alerts), r && r.rules.map(x => [x.name, x.notify, x.photo, x.urgent, x.cooldown_s])]; }));
   if (sig === gASig) return;
   gASig = sig;
@@ -972,7 +981,7 @@ function drawGAlerts(all) {
     return el("div", { className: "rule" },
       el("div", { className: "row" }, el("h3", { className: "grow" }, label(b), ...(home.sender === b.host ? [el("span", { className: "tag", textContent: "sends the alerts" })] : [])),
         el("button", { className: "b sm ghost", textContent: "Set up the alerts", onclick: go("alerts") }), el("button", { className: "b sm ghost", textContent: "Change the rules", onclick: go("ideas") })),
-      el("div", { className: "cond", textContent: a ? "Telegram: " + dest(a.telegram) + ". Webhook: " + dest(a.webhook) + ". MQTT: " + dest(a.mqtt) + "." : "No answer from this board yet." }),
+      el("div", { className: "cond", textContent: a ? "Telegram: " + dest(a.telegram) + ". Webhook: " + dest(a.webhook) + ". MQTT: " + dest(a.mqtt) + "." + (a.ntfy ? " ntfy: " + dest(a.ntfy) + "." : "") : "No answer from this board yet." }),
       ...(r ? (r.rules.length ? r.rules.map(x => el("div", { className: "row", style: "margin-top:4px" }, el("span", { style: "min-width:150px;font-size:14px", textContent: x.name }),
         chk("send an alert", x.notify, v => x.notify = v), ...(x.notify ? [...(g.cam ? [chk("with a photo", x.photo, v => x.photo = v)] : []), chk("urgent", x.urgent, v => x.urgent = v),
           el("span", { className: "note", style: "margin:0", textContent: "at most every " + x.cooldown_s + " s" })] : [])))

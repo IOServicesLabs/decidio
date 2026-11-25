@@ -3,7 +3,7 @@
 decidio puts a small decision model on an ESP32-S3 board. The model examines the camera picture and the sound from
 the microphone. It answers fixed questions approximately nine times each second, for example "Is a person in the
 room?" or "Was that a knock?". Rules on the board read the answers. A rule can set a pin, write a line to USB, or
-send an alert to Telegram, a webhook or MQTT.
+send an alert to Telegram, a webhook, MQTT or ntfy.
 
 ![The Live tab of the page of the board. A bar for each answer of the model changes approximately nine times each second.](docs/images/live-tab.gif)
 
@@ -274,7 +274,7 @@ Step 4 of the website has these forms and buttons:
 |---|---|
 | **Wi-Fi** | The network name and the password. The button **Save Wi-Fi** sends them to the board. Then the page shows the address of the board |
 | **Page password** | The password of the page of the board. The button **Save page password** sends it to the board |
-| **Alerts** | The Telegram token and chat ID, the webhook URL and format, and the MQTT broker URL, user and password. The button **Save alerts** sends them to the board. Each destination has a **Send test** button |
+| **Alerts** | The Telegram token and chat ID, the webhook URL and format, the MQTT broker URL, user and password, and the ntfy topic address and access token. The button **Save alerts** sends them to the board. Each destination has a **Send test** button |
 | **Restart the board** | Starts the board again |
 | **Open the page of the board** | A link to the page of the board |
 
@@ -310,7 +310,7 @@ form, then click **Save page password**.
 | Ideas | Shows the rules that operate now. You can change a threshold, a time, a pin, a device or an alert. You can add more ideas |
 | Devices | Adds Smart Life devices and does a test of each device. Makes a rule that switches a light |
 | Boards | Sets the room name. Shows the other boards and their rules, and adds them to the group. Sets the group password, if you want one |
-| Alerts | Sets the Telegram bot, the webhook and the MQTT broker. Each destination has a **Send test** button |
+| Alerts | Sets the Telegram bot, the webhook, the MQTT broker and ntfy. Each destination has a **Send test** button |
 | Power | Sets low power for a board on a battery, and shows the estimate of the battery life. Refer to "Low power (battery)" |
 | Radio | Shows the movement score from the signal of your router |
 | Wi-Fi | Changes the network. Sets the password of the page |
@@ -547,13 +547,13 @@ card gets new data one time in approximately one second for each board of the gr
 
 The card **Alerts of the group** on the **Group** tab shows these items for each board:
 
-- If Telegram, the webhook and MQTT are set up, and how many alerts went out and how many failed.
+- If Telegram, the webhook, MQTT and ntfy are set up, and how many alerts went out and how many failed.
 - Which board sends the alerts of the group.
 - Each rule of the board, with the boxes **send an alert**, **with a photo** and **urgent**.
 
 A change to a box is saved on that board immediately.
 
-- To enter the Telegram, webhook or MQTT data of a board, click **Set up the alerts** on its line. The **Alerts** tab
+- To enter the Telegram, webhook, MQTT or ntfy data of a board, click **Set up the alerts** on its line. The **Alerts** tab
   of that board opens. The button **Use these alert settings on all boards in the group** on that tab copies the data
   to the other boards.
 - To change the other parts of a rule, click **Change the rules**. The **Ideas** tab of that board opens.
@@ -791,14 +791,36 @@ Use a bot that you made only for this board.
 
 You can also type the token and the chat ID in the **Alerts** form at step **4. Set up** of the installer website.
 
-The Alerts tab also has fields for a webhook (for ntfy, Discord, Slack or Home Assistant) and for an MQTT broker.
+The Alerts tab also has fields for a webhook (for Discord, Slack or Home Assistant) and for an MQTT broker.
+
+### Alerts to a phone with ntfy
+
+ntfy sends push messages to the ntfy app on a phone. With ntfy, an alert can have the camera picture and the sound of
+the microphone.
+
+1. Install the ntfy app on the phone.
+2. Select a server. You can use the public server `https://ntfy.sh` or a server of your own.
+3. In the app, subscribe to a topic. On `ntfy.sh`, use a long random name, for example `decidio-k3v9q2m7xw`.
+4. On the **Alerts** tab of the board, type the topic address in **Topic address**, for example
+   `https://ntfy.sh/decidio-k3v9q2m7xw`.
+5. If your server needs a login, type an access token of the server in **Access token**.
+6. Click **Save** below the ntfy fields.
+7. Click **Send test**. A message must come to the phone. If the board has a camera and a microphone, the message has
+   the camera picture, and a second message has the sound.
+
+For a rule where you select **with a photo**, the alert has the camera picture. A second message has the last clip of
+the microphone as a WAV file. This message has a low priority, so the phone does not ring a second time.
+
+**CAUTION:** On `ntfy.sh`, each person who knows the topic name can read the alerts and see the pictures. Use a long
+random name, or a server of your own with a login.
 
 ## What leaves the board
 
 - An alert is text. The board sends it only to the destinations that you entered.
 - The board sends a camera picture only for a rule where you select **with a photo**. It sends the picture only to
-  Telegram. One idea, `trail-camera`, has this selection from the start.
-- The board does not send sound.
+  Telegram and ntfy. One idea, `trail-camera`, has this selection from the start.
+- The board sends sound only to ntfy, and only for a rule where you select **with a photo**. It sends the last clip of
+  the microphone (1 second for most models). The **Send test** button of ntfy also sends a picture and a clip.
 - A command to a Smart Life device goes to that device on your Wi-Fi. It does not go to the internet.
 - Each board sends its name, its room and its firmware version to the local network each 2 seconds. A board in a
   group also sends the names and the states of its rules.
@@ -808,8 +830,8 @@ The Alerts tab also has fields for a webhook (for ntfy, Discord, Slack or Home A
   your local network.
 - The **Group** tab shows the camera picture of each board of the group to each person who has that tab open.
 - In a group, a board gives the text of its alerts to the board that sends the alerts, on your local network. For an
-  alert with a photo, that board gets the picture from the page of the board that saw it.
-- **Use these alert settings on all boards in the group** sends the bot token, the webhook and the MQTT settings to
+  alert with a photo, that board gets the picture and the sound from the page of the board that saw it.
+- **Use these alert settings on all boards in the group** sends the bot token, the webhook, the MQTT and the ntfy settings to
   each board of the group, on your local network, without encryption.
 - The Live tab shows the camera picture to each person who has the page open.
 - The Eye tab shows three pictures to each person who has that tab open. They are the picture of the eye (40 x 30
@@ -908,7 +930,7 @@ These items were tested on one XIAO ESP32S3 Sense with a Windows computer (firmw
 - Procedure B (the commands), with the small install of step 2.
 - The Wi-Fi setup from a phone, and through USB with `decidio wifi`.
 - The tabs of the page, and rules that stay after a restart.
-- Webhook alerts and MQTT alerts from a rule.
+- Webhook alerts, MQTT alerts and ntfy alerts from a rule.
 - A model update and a firmware update from the System tab.
 - Device control with a simulated Smart Life device on a computer, for the versions 3.1, 3.3, 3.4 and 3.5. The test
   included on, off, status, an incorrect key, and a rule that switches the device.
