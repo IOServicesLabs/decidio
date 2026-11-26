@@ -266,11 +266,13 @@
 
             <fieldset class="dest" data-dest="ntfy">
               <legend>ntfy (push to a phone)</legend>
+              <div class="row"><button type="button" class="btn small" id="ntfy_new">Use the community server</button></div>
               <label for="ntfy_url">Topic address (http:// or https://)</label>
-              <input id="ntfy_url" type="text" inputmode="url" autocomplete="off" placeholder="Not changed, for example https://ntfy.sh/a-long-random-name" spellcheck="false">
+              <input id="ntfy_url" type="text" inputmode="url" autocomplete="off" placeholder="Not changed, for example https://nftyio.duckdns.org/decidio-a-long-random-name" spellcheck="false">
               <label for="ntfy_tok">Access token (optional)</label>
               <input id="ntfy_tok" type="password" autocomplete="off" placeholder="Not changed">
-              <p class="hint">Install the ntfy app on the phone and subscribe to the same topic. For a rule with a photo, the alert has the camera picture and the sound of the microphone. On ntfy.sh, each person who knows the topic name can read the alerts: use a long random name, or your own server.</p>
+              <p class="hint">Install the ntfy app on the phone. <b>Use the community server</b> makes a new private topic on the decidio community server. Then subscribe to the same topic in the app. For a rule with a photo, the alert has the camera picture and the sound of the microphone. Each person who knows the topic name can read the alerts: keep the name secret. The community server keeps messages and files for 24 hours and keeps 25 MB of files for each address. It deletes the oldest files first. The community server is optional.</p>
+              <p class="msg" id="ntfy_new_msg" role="status" aria-live="polite"></p>
               <label class="check"><input type="checkbox" data-remove="ntfy"> Remove the ntfy settings from the board</label>
               <div class="row"><button type="button" class="btn small" data-test="ntfy">Send test</button></div>
               <p class="msg result" data-result="ntfy" role="status" aria-live="polite"></p>

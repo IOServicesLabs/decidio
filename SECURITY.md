@@ -62,5 +62,6 @@ error as it does on a correct answer.**
 | A camera picture | Only Telegram and ntfy, and only for a rule where you select **with a photo** |
 | Commands to a Smart Life device | That device on your Wi-Fi. They do not go to the internet. |
 | Sound | Only ntfy, and only for a rule where you select **with a photo**: the last clip of the microphone (1 second for most models). The **Send test** button of ntfy also sends a picture and a clip. |
+| Data on the decidio community server for ntfy | Only if you select it on the **Alerts** tab. The server keeps the alerts, the pictures and the sounds for 24 hours, and 25 MB of files for each internet address (oldest files deleted first). Each person who knows the topic name can read the topic. |
 
 README.md tells you more in the sections "What leaves the board" and "Warnings".

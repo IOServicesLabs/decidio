@@ -151,6 +151,7 @@ specific to one home.
 | MQTT topic for the status | `decidio/<name>/status`, kept at `online` or `offline` |
 | ntfy settings | `ntfy_url` (the address of the topic), `ntfy_tok` (an access token, optional, sent as `Authorization: Bearer`) |
 | ntfy message for a rule with a photo | The text with the camera picture (`photo.jpg`, 192 x 192). Then the last clip of the microphone (`sound.wav`, 16-bit mono, at the rate of the model) with priority 2 |
+| ntfy community server | `https://nftyio.duckdns.org`, topics `decidio-*`, no login. Messages and files are kept for 24 hours, 25 MB of files for each address (the oldest are deleted first), 2 MB for each file. If the server has no space for the picture (HTTP 413 or 507), the board sends the text alone |
 | ntfy priority | 5 for an urgent rule, 4 when a rule goes on, 3 when it goes off, for a grouped message and for a test |
 | Sound of the microphone | `GET /api/sound.wav` on the page of the board. The board that sends the alerts of a group gets it there |
 | Alerts that leave the board | A maximum of 20 each minute |

@@ -460,6 +460,13 @@ static void ntfy(const job_t *j, rt_alert_result_t *r)
     }
     ntfy_send(title, msg, prio, tags, jpg ? "photo.jpg" : NULL, "image/jpeg", jpg, jl, r);
     free(jpg);
+    if (jpg && (r->status == 413 || r->status == 507)) {   // the server has no space for the file now: send the text alone
+        ntfy_send(title, msg, prio, tags, NULL, NULL, NULL, 0, r);
+        if (r->ok) {
+            snprintf(r->detail, sizeof(r->detail), "the server had no space for the picture: text only");
+        }
+        return;
+    }
     if (!r->ok || !j->photo) {
         return;
     }

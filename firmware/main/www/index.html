@@ -247,12 +247,13 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
     </div>
     <div class="card">
       <h2>ntfy (push to a phone)</h2>
-      <p class="note" style="margin-top:0">Install the ntfy app on the phone and subscribe to a topic. Enter the address of that topic here. For a rule with a photo, the alert has the camera picture, and a second, quiet message has the sound of the microphone.</p>
-      <label for="ntfy_url">Topic address, e.g. https://ntfy.sh/a-long-random-name</label><input id="ntfy_url" autocomplete="off" placeholder="unchanged">
+      <p class="note" style="margin-top:0">Install the ntfy app on the phone. Click <b>Use the community server</b> to make a new private topic on the decidio community server, then click <b>Save</b>. Or enter the address of a topic on a different server. For a rule with a photo, the alert has the camera picture, and a second, quiet message has the sound of the microphone.</p>
+      <div class="row"><button class="b ghost" id="ntfy_new">Use the community server</button></div>
+      <label for="ntfy_url">Topic address, e.g. https://nftyio.duckdns.org/decidio-a-long-random-name</label><input id="ntfy_url" autocomplete="off" placeholder="unchanged">
       <label for="ntfy_tok">Access token (optional, for a server that needs a login)</label><input id="ntfy_tok" type="password" autocomplete="off" placeholder="unchanged">
       <div class="row"><button class="b" data-save="ntfy_url,ntfy_tok">Save</button><button class="b ghost" data-test="ntfy">Send test</button></div>
       <div class="msg" id="m-ntfy"></div>
-      <p class="note">The test sends the camera picture and the sound now, if this board has a camera and a microphone. On the public server ntfy.sh, each person who knows the topic name can read the alerts: use a long random name, or your own server.</p>
+      <p class="note">The test sends the camera picture and the sound now, if this board has a camera and a microphone. On the community server and on ntfy.sh, each person who knows the topic name can read the alerts. Keep the topic name secret. The community server keeps messages and files for 24 hours and keeps 25 MB of files for each address. When an address has more, the server deletes its oldest files first. The community server is optional: the board works without it.</p>
     </div>
     <div class="card"><h2>Fewer messages</h2>
       <p class="note" style="margin-top:0">The first alert goes out at once. The alerts in the next seconds are kept, and then go out together as one message. An alert of a rule marked <b>urgent</b> always goes out at once.</p>
@@ -686,6 +687,15 @@ document.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
   for (const k of b.dataset.save.split(",")) if ($(k).placeholder) $(k).value = "";
   refresh();
 });
+// A new private topic on the community server: the random name is the key, so nobody else can read it.
+const NTFY_COMMUNITY = "https://nftyio.duckdns.org";
+$("ntfy_new").onclick = () => {
+  const a = "abcdefghijkmnpqrstuvwxyz23456789", r = crypto.getRandomValues(new Uint8Array(20));
+  const topic = "decidio-" + Array.from(r, x => a[x % a.length]).join("");
+  $("ntfy_url").value = NTFY_COMMUNITY + "/" + topic;
+  $("ntfy_tok").value = "-";
+  say($("m-ntfy"), true, "New topic: " + topic + ". Click Save. In the ntfy app, add the server " + NTFY_COMMUNITY + " and subscribe to " + topic + ". Keep this name: it is shown only now.");
+};
 document.querySelectorAll("[data-test]").forEach(b => b.onclick = async () => {
   const m = $("m-" + b.dataset.test); b.disabled = true; say(m, true, "Sending...");
   let r; try { r = await api("/api/test", { dest: b.dataset.test }); } catch (e) { r = { detail: "no answer from the board" }; }

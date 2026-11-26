@@ -574,7 +574,7 @@ upload to the first board.
 
 - To send the firmware that a board has now, click **Give the firmware of this board to the other boards** on the
   **Group** tab.
-- The card shows the firmware as a version and a build, for example `0.4.0, build a08c64b4`. Two boards have the same
+- The card shows the firmware as a version and a build, for example `0.5.0, build a08c64b4`. Two boards have the same
   firmware when the builds are the same.
 - A board that gets firmware from a different board does not send it on. Thus the firmware does not go round the
   group again and again.
@@ -798,21 +798,35 @@ The Alerts tab also has fields for a webhook (for Discord, Slack or Home Assista
 ntfy sends push messages to the ntfy app on a phone. With ntfy, an alert can have the camera picture and the sound of
 the microphone.
 
+The decidio community server `https://nftyio.duckdns.org` is free for all decidio boards. You need no account.
+
 1. Install the ntfy app on the phone.
-2. Select a server. You can use the public server `https://ntfy.sh` or a server of your own.
-3. In the app, subscribe to a topic. On `ntfy.sh`, use a long random name, for example `decidio-k3v9q2m7xw`.
-4. On the **Alerts** tab of the board, type the topic address in **Topic address**, for example
-   `https://ntfy.sh/decidio-k3v9q2m7xw`.
-5. If your server needs a login, type an access token of the server in **Access token**.
-6. Click **Save** below the ntfy fields.
-7. Click **Send test**. A message must come to the phone. If the board has a camera and a microphone, the message has
+2. On the **Alerts** tab of the board, click **Use the community server**. The page makes a new topic with a long
+   random name, for example `decidio-k3v9q2m7xwa8bn4tdh5ec6`, and shows the name.
+3. In the app, add the server `https://nftyio.duckdns.org`, and subscribe to the topic that the page shows.
+4. Click **Save** below the ntfy fields.
+5. Click **Send test**. A message must come to the phone. If the board has a camera and a microphone, the message has
    the camera picture, and a second message has the sound.
+
+To use a different server (`https://ntfy.sh` or a server of your own), type the topic address in **Topic address**, for
+example `https://ntfy.sh/decidio-k3v9q2m7xwa8bn4tdh5ec6`. If the server needs a login, type an access token of the
+server in **Access token**.
+
+The community server has these limits:
+
+- It keeps the messages, the pictures and the sounds for 24 hours. Then it deletes them.
+- It keeps 25 MB of files for each internet address. When an address has more, the server deletes the oldest files of
+  that address first. The text of the alerts stays.
+- It accepts topics that start with `decidio-` only.
+
+The community server is optional. The board works fully without it.
 
 For a rule where you select **with a photo**, the alert has the camera picture. A second message has the last clip of
 the microphone as a WAV file. This message has a low priority, so the phone does not ring a second time.
 
-**CAUTION:** On `ntfy.sh`, each person who knows the topic name can read the alerts and see the pictures. Use a long
-random name, or a server of your own with a login.
+**CAUTION:** On the community server and on `ntfy.sh`, each person who knows the topic name can read the alerts, see
+the pictures and hear the sound. Keep the topic name secret. Use the random name that the page makes, or a server of
+your own with a login.
 
 ## What leaves the board
 

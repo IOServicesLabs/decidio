@@ -2,12 +2,20 @@
 
 ## Unreleased
 
+## 0.5.0
+
+It has the Python tool 0.5.0 and the firmware decidio-rt 0.5.0.
+
 ### Added
 
 - Alerts: a new destination, ntfy. It sends push messages to the ntfy app on a phone, through `ntfy.sh` or a server of
   your own, with an optional access token. For a rule with a photo, the alert has the camera picture, and a second,
   quiet message has the last clip of the microphone as a WAV file. The Alerts tab, step 4 of the installer website and
   the console (`alert test ntfy`) have it.
+- Alerts: the button **Use the community server** on the Alerts tab and in step 4 of the installer website. It makes a
+  new topic with a long random name on the decidio community server for ntfy, `https://nftyio.duckdns.org`. The server
+  is optional.
+- Alerts: if the ntfy server has no space for the picture, the board sends the text of the alert alone.
 - Firmware: the route `GET /api/sound.wav`, the last clip of the microphone.
 
 - Devices tab: a new card **Devices heard on the network**. It shows a name for each Smart Life device that the board

@@ -626,6 +626,20 @@ async function start({ demo, mobile, boardName, version }) {
   }
   const removeBox = dest => document.querySelector('[data-remove="' + dest + '"]');
   const valueOf = f => (f.trim ? $(f.key).value.trim() : $(f.key).value);
+
+  // A new private topic on the community server: the random name is the key, so nobody else can read it. The server
+  // needs no token, so a save after this also removes a token that the board has from an other server.
+  const NTFY_COMMUNITY = "https://nftyio.duckdns.org";
+  let ntfyCommunity = false;
+  $("ntfy_new").addEventListener("click", () => {
+    const a = "abcdefghijkmnpqrstuvwxyz23456789", r = crypto.getRandomValues(new Uint8Array(20));
+    const topic = "decidio-" + Array.from(r, x => a[x % a.length]).join("");
+    $("ntfy_url").value = NTFY_COMMUNITY + "/" + topic;
+    $("ntfy_url").dispatchEvent(new Event("input"));
+    ntfyCommunity = true;
+    say("ntfy_new_msg", "New topic: " + topic + ". In the ntfy app, add the server " + NTFY_COMMUNITY +
+      " and subscribe to " + topic + ". Then click Save. Keep this name: the page does not show it again.", "ok");
+  });
   document.querySelectorAll("[data-remove]").forEach(box => box.addEventListener("change", () => {
     for (const f of FIELDS) if (f.dest === box.dataset.remove) $(f.key).disabled = box.checked;
   }));
@@ -650,6 +664,8 @@ async function start({ demo, mobile, boardName, version }) {
         plan.push({ f, value: v });
       }
     }
+    if (ntfyCommunity && plan.some(p => p.f.key === "ntfy_url" && p.value.startsWith(NTFY_COMMUNITY + "/")) &&
+        !plan.some(p => p.f.key === "ntfy_tok")) plan.push({ f: FIELDS.find(f => f.key === "ntfy_tok"), value: "" });
     if (!plan.length) return say("alertMsg", "Nothing to save. Type a value, or select a box to remove a destination.", "bad");
     const btn = $("saveAlerts");
     busy(btn, true);
