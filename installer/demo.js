@@ -231,7 +231,7 @@ class DemoBoard {
     for (const q of QUESTIONS) options[q] = q === "light" ? ["day", "dim", "dark"] : ["no", "yes"];
     return {
       info: {
-        fw: "decidio-rt 0.5.0", board: "xiao_sense", camera: "OV3660", mic: true,
+        fw: "decidio-rt 0.5.1", board: "xiao_sense", camera: "OV3660", mic: true,
         sensors: { profile: "xiao_sense", saved: true, camera: "OV3660", mic: true, mic_spread: 14, card: false, radio: true, psram_mb: 8, flash_mb: 8 },
         model: { name: "general", image: { size: 96, colors: 1, motion: 1 }, audio: { sr: 16000, clip: 16000 }, questions: QUESTIONS,
           options, na: [], arena_used: 391204 },

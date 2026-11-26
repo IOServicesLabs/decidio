@@ -130,7 +130,7 @@ The command writes the files to `decidio/firmware_bins/esp32s3/`.
 
 ### With Docker
 
-Use this method on Linux, macOS or WSL. The prebuilt firmware of 0.5.0 was made with this method (ESP-IDF 5.5.6).
+Use this method on Linux, macOS or WSL. The prebuilt firmware of 0.5.1 was made with this method (ESP-IDF 5.5.6).
 
 1. Type this command in the top folder of the repository:
 

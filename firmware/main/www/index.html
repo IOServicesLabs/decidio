@@ -22,7 +22,8 @@ label { display:block; font-size:13px; color:var(--dim); margin:10px 0 3px; }
 input, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:4px; background:var(--bg); color:var(--ink); font:inherit; }
 input[type=checkbox] { width:auto; margin:0 6px 0 0; } input[type=file] { padding:6px; }
 button.b { margin-top:12px; padding:8px 14px; border:0; border-radius:4px; background:var(--acc); color:var(--accink); font:inherit; cursor:pointer; }
-button.b.ghost { background:none; color:var(--acc); border:1px solid var(--line); } button.b.sm { margin-top:0; padding:5px 10px; font-size:14px; }
+a.b { display:inline-block; margin-top:12px; padding:8px 14px; border-radius:4px; text-decoration:none; font:inherit; }
+a.b.ghost, button.b.ghost { background:none; color:var(--acc); border:1px solid var(--line); } button.b.sm { margin-top:0; padding:5px 10px; font-size:14px; }
 button.b.danger { background:none; color:var(--bad); border:1px solid var(--line); } button.b:disabled { opacity:.5; }
 .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; } .grow { flex:1; min-width:0; }
 .kv { display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; font-size:14px; margin:0; }
@@ -247,8 +248,15 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
     </div>
     <div class="card">
       <h2>ntfy (push to a phone)</h2>
-      <p class="note" style="margin-top:0">Install the ntfy app on the phone. Click <b>Use the community server</b> to make a new private topic on the decidio community server, then click <b>Save</b>. Or enter the address of a topic on a different server. For a rule with a photo, the alert has the camera picture, and a second, quiet message has the sound of the microphone.</p>
-      <div class="row"><button class="b ghost" id="ntfy_new">Use the community server</button></div>
+      <p class="note" style="margin-top:0">Install the ntfy app on the phone. Click <b>Use the community server</b>. The board gets a new private topic on the decidio community server and saves it. Or enter the address of a topic on a different server and click <b>Save</b>. For a rule with a photo, the alert has the camera picture, and a second, quiet message has the sound of the microphone.</p>
+      <div class="row"><button class="b" id="ntfy_new">Use the community server</button></div>
+      <div id="ntfySub" hidden style="margin:10px 0;padding:10px;border:1px solid var(--line,#8884);border-radius:8px">
+        <b>Subscribe in the ntfy app</b>
+        <p class="note" style="margin:4px 0">In the app, tap <b>+</b>. Type the topic. Select <b>Use another server</b> and type the server. Type the server alone, without the topic.</p>
+        <label for="ntfySrv">Server</label><div class="row"><input id="ntfySrv" readonly><button class="b ghost" data-copy="ntfySrv">Copy</button></div>
+        <label for="ntfyTop">Topic</label><div class="row"><input id="ntfyTop" readonly><button class="b ghost" data-copy="ntfyTop">Copy</button></div>
+        <div class="row"><a class="b ghost" id="ntfyApp" href="#">Open in the ntfy app (Android)</a><a class="b ghost" id="ntfyWeb" href="#" target="_blank" rel="noopener">Open in a browser</a></div>
+      </div>
       <label for="ntfy_url">Topic address, e.g. https://nftyio.duckdns.org/decidio-a-long-random-name</label><input id="ntfy_url" autocomplete="off" placeholder="unchanged">
       <label for="ntfy_tok">Access token (optional, for a server that needs a login)</label><input id="ntfy_tok" type="password" autocomplete="off" placeholder="unchanged">
       <div class="row"><button class="b" data-save="ntfy_url,ntfy_tok">Save</button><button class="b ghost" data-test="ntfy">Send test</button></div>
@@ -478,6 +486,7 @@ async function refresh() {
   loadPower(false);
   kv($("tally"), [["Telegram", line(a.telegram)], ["Webhook", line(a.webhook)], ["MQTT", line(a.mqtt) + (a.mqtt.set ? (a.mqtt.connected ? ", connected" : ", not connected") : "")], ...(a.ntfy ? [["ntfy", line(a.ntfy)]] : []), ["Dropped", a.dropped],
     ...(a.window !== undefined ? [["Kept and sent together", a.grouped], ["Given to the board that sends the alerts", a.handed]] : [])]);
+  showNtfy(a.ntfy);
   if (first) {
     $("tg_chat").value = a.telegram.chat; $("hook_fmt").value = a.webhook.format; $("alert_window").value = a.window ?? 60; $("sumAt").value = hhmm(d.summary_at);
     if (w.state === "online" && d.tz !== browserTz()) api("/api/time", { tz: browserTz() });
@@ -689,12 +698,32 @@ document.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
 });
 // A new private topic on the community server: the random name is the key, so nobody else can read it.
 const NTFY_COMMUNITY = "https://nftyio.duckdns.org";
-$("ntfy_new").onclick = () => {
+// The saved topic, split into the two values that the ntfy app asks for (a server typed with the topic gives a 404).
+function showNtfy(n) {
+  let srv = "", top = "";
+  try { const u = new URL(n && n.url || ""); srv = u.origin; top = u.pathname.replace(/^\/+|\/+$/g, ""); } catch (e) {}
+  $("ntfySub").hidden = !top;
+  if (!top) { $("ntfy_new").textContent = "Use the community server"; return; }
+  $("ntfySrv").value = srv; $("ntfyTop").value = top;
+  $("ntfyApp").href = "ntfy://" + new URL(srv).host + "/" + top;
+  $("ntfyWeb").href = srv + "/" + top;
+  $("ntfy_new").textContent = srv === NTFY_COMMUNITY ? "Make a new topic" : "Use the community server";
+}
+document.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => {
+  const i = $(b.dataset.copy); i.focus(); i.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}       // the page is http: no clipboard API
+  b.textContent = ok ? "Copied" : "Select and copy"; setTimeout(() => b.textContent = "Copy", 1500);
+});
+$("ntfy_new").onclick = async () => {
+  const b = $("ntfy_new"), m = $("m-ntfy"), again = b.textContent === "Make a new topic";
   const a = "abcdefghijkmnpqrstuvwxyz23456789", r = crypto.getRandomValues(new Uint8Array(20));
   const topic = "decidio-" + Array.from(r, x => a[x % a.length]).join("");
-  $("ntfy_url").value = NTFY_COMMUNITY + "/" + topic;
-  $("ntfy_tok").value = "-";
-  say($("m-ntfy"), true, "New topic: " + topic + ". Click Save. In the ntfy app, add the server " + NTFY_COMMUNITY + " and subscribe to " + topic + ". Keep this name: it is shown only now.");
+  b.disabled = true;
+  let res; try { res = await api("/api/alerts", { ntfy_url: NTFY_COMMUNITY + "/" + topic, ntfy_tok: "" }); } catch (e) { res = { error: "no answer from the board" }; }
+  b.disabled = false;
+  say(m, res.ok, res.ok ? "Saved the new topic " + topic + "." + (again ? " The old topic gets no more alerts: subscribe to the new one in the app." : " Subscribe to it in the app, then click Send test.") : "Not saved: " + res.error);
+  if (res.ok) showNtfy({ url: NTFY_COMMUNITY + "/" + topic });
+  refresh();
 };
 document.querySelectorAll("[data-test]").forEach(b => b.onclick = async () => {
   const m = $("m-" + b.dataset.test); b.disabled = true; say(m, true, "Sending...");

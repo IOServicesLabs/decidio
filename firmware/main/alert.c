@@ -995,17 +995,19 @@ bool rt_alert_test(const char *dest, rt_alert_result_t *out)
 
 int rt_alert_json(char *dst, size_t cap)
 {
+    char url[260];                                         // the ntfy topic is shown, so the page can show how to subscribe
+    esc(url, sizeof(url), s_cfg.ntfy_url);
     return snprintf(dst, cap,
                     "{\"telegram\":{\"set\":%s,\"chat\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
                     "\"webhook\":{\"set\":%s,\"format\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
                     "\"mqtt\":{\"set\":%s,\"connected\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},"
-                    "\"ntfy\":{\"set\":%s,\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},\"dropped\":%lu,"
+                    "\"ntfy\":{\"set\":%s,\"url\":\"%s\",\"sent\":%lu,\"failed\":%lu,\"last\":\"%s\"},\"dropped\":%lu,"
                     "\"window\":%d,\"handed\":%lu,\"grouped\":%lu}",
                     s_cfg.tg_token[0] && s_cfg.tg_chat[0] ? "true" : "false", s_cfg.tg_chat, (unsigned long)s_tg.sent,
                     (unsigned long)s_tg.failed, s_tg.last, s_cfg.hook_url[0] ? "true" : "false",
                     s_cfg.hook_fmt[0] ? s_cfg.hook_fmt : "json", (unsigned long)s_hook.sent, (unsigned long)s_hook.failed,
                     s_hook.last, s_cfg.mqtt_url[0] ? "true" : "false", s_mqtt_up ? "true" : "false",
-                    (unsigned long)s_mq.sent, (unsigned long)s_mq.failed, s_mq.last, s_cfg.ntfy_url[0] ? "true" : "false",
+                    (unsigned long)s_mq.sent, (unsigned long)s_mq.failed, s_mq.last, s_cfg.ntfy_url[0] ? "true" : "false", url,
                     (unsigned long)s_nt.sent, (unsigned long)s_nt.failed, s_nt.last, (unsigned long)s_dropped, s_window_s,
                     (unsigned long)s_handed, (unsigned long)s_folded);
 }

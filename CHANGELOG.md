@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.5.1
+
+It has the Python tool 0.5.1 and the firmware decidio-rt 0.5.1.
+
+### Changed
+
+- Alerts: **Use the community server** saves the new topic immediately. The box **Subscribe in the ntfy app** shows the
+  server and the topic as two values, with **Copy** buttons and a link that opens the ntfy app on Android. The box stays
+  on the page. **Make a new topic** replaces the topic.
+
 ## 0.5.0
 
 It has the Python tool 0.5.0 and the firmware decidio-rt 0.5.0.

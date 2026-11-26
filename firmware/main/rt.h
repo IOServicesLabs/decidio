@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define RT_VERSION "0.5.0"
+#define RT_VERSION "0.5.1"
 #define RT_CAM 96            // every frame is 96x96 (center square of the sensor, like training data)
 #define RT_MAX_Q 16
 #define RT_MAX_OPT 16

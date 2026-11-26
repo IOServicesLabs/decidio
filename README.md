@@ -574,7 +574,7 @@ upload to the first board.
 
 - To send the firmware that a board has now, click **Give the firmware of this board to the other boards** on the
   **Group** tab.
-- The card shows the firmware as a version and a build, for example `0.5.0, build a08c64b4`. Two boards have the same
+- The card shows the firmware as a version and a build, for example `0.5.1, build a08c64b4`. Two boards have the same
   firmware when the builds are the same.
 - A board that gets firmware from a different board does not send it on. Thus the firmware does not go round the
   group again and again.
@@ -801,12 +801,17 @@ the microphone.
 The decidio community server `https://nftyio.duckdns.org` is free for all decidio boards. You need no account.
 
 1. Install the ntfy app on the phone.
-2. On the **Alerts** tab of the board, click **Use the community server**. The page makes a new topic with a long
-   random name, for example `decidio-k3v9q2m7xwa8bn4tdh5ec6`, and shows the name.
-3. In the app, add the server `https://nftyio.duckdns.org`, and subscribe to the topic that the page shows.
-4. Click **Save** below the ntfy fields.
-5. Click **Send test**. A message must come to the phone. If the board has a camera and a microphone, the message has
+2. On the **Alerts** tab of the board, click **Use the community server**. The board gets a new topic with a long
+   random name, for example `decidio-k3v9q2m7xwa8bn4tdh5ec6`, and saves it. The box **Subscribe in the ntfy app** shows
+   the server and the topic. The box stays on the page.
+3. In the app, tap **+**. Type the topic. Select **Use another server** and type the server,
+   `https://nftyio.duckdns.org`. Do not add the topic to the server: the app then shows an error 404. On Android, you
+   can also tap **Open in the ntfy app**.
+4. Click **Send test**. A message must come to the phone. If the board has a camera and a microphone, the message has
    the camera picture, and a second message has the sound.
+
+To change to a new topic, click **Make a new topic**. The old topic gets no more alerts. Subscribe to the new topic in
+the app.
 
 To use a different server (`https://ntfy.sh` or a server of your own), type the topic address in **Topic address**, for
 example `https://ntfy.sh/decidio-k3v9q2m7xwa8bn4tdh5ec6`. If the server needs a login, type an access token of the

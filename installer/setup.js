@@ -637,8 +637,21 @@ async function start({ demo, mobile, boardName, version }) {
     $("ntfy_url").value = NTFY_COMMUNITY + "/" + topic;
     $("ntfy_url").dispatchEvent(new Event("input"));
     ntfyCommunity = true;
-    say("ntfy_new_msg", "New topic: " + topic + ". In the ntfy app, add the server " + NTFY_COMMUNITY +
-      " and subscribe to " + topic + ". Then click Save. Keep this name: the page does not show it again.", "ok");
+    $("ntfy_new").textContent = "Make a new topic";
+    // The ntfy app asks for the server and the topic in two fields; a server typed with the topic gives a 404.
+    const m = $("ntfy_new_msg"), line = (k, v) => {
+      const p = document.createElement("div"), c = document.createElement("code"), b = document.createElement("button");
+      c.textContent = v; b.type = "button"; b.className = "btn small"; b.textContent = "Copy";
+      b.addEventListener("click", () => navigator.clipboard.writeText(v).then(() => { b.textContent = "Copied"; }, () => {}));
+      p.append(k + ": ", c, " ", b);
+      return p;
+    };
+    const app = document.createElement("a");
+    app.href = "ntfy://" + new URL(NTFY_COMMUNITY).host + "/" + topic; app.textContent = "Open in the ntfy app (Android)";
+    m.className = "msg ok";
+    m.replaceChildren("New topic. Click Save. In the ntfy app, tap +, type the topic, select Use another server and type the server alone:",
+      line("Server", NTFY_COMMUNITY), line("Topic", topic), app,
+      document.createTextNode(" Keep the topic: the board does not show it in this installer again."));
   });
   document.querySelectorAll("[data-remove]").forEach(box => box.addEventListener("change", () => {
     for (const f of FIELDS) if (f.dest === box.dataset.remove) $(f.key).disabled = box.checked;
