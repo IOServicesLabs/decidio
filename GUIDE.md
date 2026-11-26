@@ -130,6 +130,7 @@ procedure. This is a summary:
 |---|---|
 | `devices.c` | Sends commands to the device on its own port 6668, with the Tuya local protocol (versions 3.1, 3.3, 3.4 and 3.5). It uses one connection for each command, and the local key of the device. It gets the addresses and the protocol versions from the broadcasts of the devices |
 | `home.c` | Broadcasts the name and the room of each board every 2 s, and immediately after a change. Inside a group, it also broadcasts the states of the rules, signed with the group secret, and it sends the same message with ESP-NOW to the boards in radio range |
+| `update.c` | **Check for updates**: reads `version` from `https://ioserviceslabs.github.io/decidio/builds/index.json` and, when a person clicks **Install**, writes `builds/app.bin` to the other app slot over HTTPS, then restarts. After the restart, `push.c` gives the firmware to the group. `GET /api/update` is the state, `POST /api/update` with `{"install":true}` or `false` starts it. The board does not look for updates by itself |
 | `push.c` | After new firmware comes from the page, sends the app image of this board to each board of the group that has a different build (`POST /api/firmware` with the token of the group). `POST /api/home/push` starts it by hand |
 | `tools/fake_tuya_device.py` | A device to test against, without a key |
 

@@ -564,7 +564,11 @@ Each board uses the same firmware file. Thus one board can give its firmware to 
 
 1. Open the page of one board directly (not through the **Board** list).
 2. Open the **System** tab.
-3. Below **Firmware**, select the file `decidio_rt.bin`. Click **Update firmware**.
+3. Below **Firmware**, click **Check for updates**. The board asks the decidio installer website for the newest
+   firmware. If the firmware is newer, click **Install** (with the version on it). The board downloads the firmware
+   over Wi-Fi.
+
+   Or select the file `decidio_rt.bin` and click **Update firmware**.
 4. Wait. The board restarts with the new firmware. Then it sends the firmware to each other board of the group
    that has a different firmware. Each of those boards makes a check of the file, then restarts with it.
 5. Open the **Group** tab. The card **Firmware of the group** shows the firmware of each board and the progress.
@@ -574,7 +578,7 @@ upload to the first board.
 
 - To send the firmware that a board has now, click **Give the firmware of this board to the other boards** on the
   **Group** tab.
-- The card shows the firmware as a version and a build, for example `0.5.1, build a08c64b4`. Two boards have the same
+- The card shows the firmware as a version and a build, for example `0.5.2, build a08c64b4`. Two boards have the same
   firmware when the builds are the same.
 - A board that gets firmware from a different board does not send it on. Thus the firmware does not go round the
   group again and again.

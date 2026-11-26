@@ -149,12 +149,16 @@ def make(out: Path = OUT, log=print) -> dict:
     board, and index.json."""
     out = Path(out)
     cat = [e for e in recipes.load() if e["status"] != "teach"]
-    index = {"version": __version__, "firmware": "firmware.bin", "boards": {}, "ideas": []}
+    index = {"version": __version__, "firmware": "firmware.bin", "app": "app.bin", "boards": {}, "ideas": []}
     total = 0
     if have_firmware():
         out.mkdir(parents=True, exist_ok=True)
         fw = firmware_image()
         (out / "firmware.bin").write_bytes(fw)
+        # The app alone, for "Check for updates" on the page of a board: it reads "version" from index.json and writes
+        # this file to its other app partition, over Wi-Fi.
+        app = next(Path(path) for off, path in firmware_pairs(None) if int(off, 16) == 0x10000)
+        (out / "app.bin").write_bytes(app.read_bytes())
         total += len(fw)
     for board in (BOARD_BASE if have_firmware() else []):
         d = out / board

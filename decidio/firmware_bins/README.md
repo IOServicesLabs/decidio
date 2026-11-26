@@ -29,7 +29,7 @@ The firmware operates with the model package that is in the `model` partition. T
 `decidio flash model --port COMx` or `decidio install <idea> --port COMx`. The offset is `model_offset` in
 `flash.json` (0x510000).
 
-Version: decidio-rt 0.5.1. It was built from the current `firmware/` folder in the `espressif/idf:release-v5.5`
+Version: decidio-rt 0.5.2. It was built from the current `firmware/` folder in the `espressif/idf:release-v5.5`
 Docker image, with these components:
 
 | Component | Version |

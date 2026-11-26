@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.5.2
+
+It has the Python tool 0.5.2 and the firmware decidio-rt 0.5.2.
+
+### Added
+
+- Firmware: **Check for updates** on the System tab. The board reads the newest version from the installer website
+  and, when you click **Install**, downloads the firmware over Wi-Fi and restarts with it. Then it gives the firmware
+  to the other boards of the group. The board does not look for updates by itself. The routes are `GET /api/update`
+  and `POST /api/update`.
+- Installer builds: `builds/app.bin`, the app image for **Check for updates**.
+
 ## 0.5.1
 
 It has the Python tool 0.5.1 and the firmware decidio-rt 0.5.1.

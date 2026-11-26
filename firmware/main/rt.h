@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define RT_VERSION "0.5.1"
+#define RT_VERSION "0.5.2"
 #define RT_CAM 96            // every frame is 96x96 (center square of the sensor, like training data)
 #define RT_MAX_Q 16
 #define RT_MAX_OPT 16
@@ -328,6 +328,8 @@ int rt_home_json(char *dst, size_t cap);
 // push.c - one board gives the firmware it runs to the other boards of the group
 void rt_push_boot(void);                               // at start: new firmware came from the page before the restart
 void rt_push_mark(void);                               // new firmware came from the page: push it after the restart
+bool rt_update_start(bool install);                     // check the installer website for newer firmware (and install it)
+int rt_update_json(char *dst, size_t cap);               // the state of that check: {"state","current","latest","newer",...}
 bool rt_push_start(char *why, size_t cap);             // push now (the page's button)
 int rt_push_json(char *dst, size_t cap);               // {"state":"idle|run|done","boards":[{"host":..,"state":..}]}
 

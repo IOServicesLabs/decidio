@@ -21,6 +21,7 @@
 //   GET  /api/recipes    the ideas built into this firmware (recipes.json), each with its rules
 //   POST /api/model      a model package (model.dcd) as the request body: written to flash, then the board restarts
 //   POST /api/firmware   an app image (decidio_rt.bin) as the request body: written to the other app slot, then restart
+//   GET  /api/update     the state of "Check for updates"; POST {"install":bool} starts a check (and an install)
 //   POST /api/reset      forget every setting (Wi-Fi, alerts, edited rules, password) and restart
 //   POST /api/password   {"pass"}  ("" removes it)
 //   POST /api/reboot
@@ -615,6 +616,32 @@ static esp_err_t h_firmware(httpd_req_t *req)
     return ESP_OK;
 }
 
+// Check for updates: GET is the state; POST {"install":false} checks the installer website, {"install":true} also
+// downloads a newer firmware and restarts into it (update.c). The work runs in its own task; the page polls GET.
+static esp_err_t h_update_get(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    char b[256];
+    rt_update_json(b, sizeof(b));
+    return json(req, b);
+}
+
+static esp_err_t h_update(httpd_req_t *req)
+{
+    if (!allowed(req)) {
+        return ESP_OK;
+    }
+    cJSON *j = body(req);
+    const bool install = j && cJSON_IsTrue(cJSON_GetObjectItem(j, "install"));
+    cJSON_Delete(j);
+    if (!rt_update_start(install)) {
+        return bad(req, "a check is running already");
+    }
+    return json(req, "{\"ok\":true}");
+}
+
 static esp_err_t h_reset(httpd_req_t *req)
 {
     if (!allowed(req)) {
@@ -1138,6 +1165,8 @@ void rt_web_start(void)
         { .uri = "/api/recipes", .method = HTTP_GET, .handler = h_recipes },
         { .uri = "/api/model", .method = HTTP_POST, .handler = h_model },
         { .uri = "/api/firmware", .method = HTTP_POST, .handler = h_firmware },
+        { .uri = "/api/update", .method = HTTP_GET, .handler = h_update_get },
+        { .uri = "/api/update", .method = HTTP_POST, .handler = h_update },
         { .uri = "/api/reset", .method = HTTP_POST, .handler = h_reset },
         { .uri = "/api/password", .method = HTTP_POST, .handler = h_password },
         { .uri = "/api/reboot", .method = HTTP_POST, .handler = h_reboot },

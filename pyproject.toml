@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "decidio"
-version = "0.5.1"
+version = "0.5.2"
 description = "Install, teach and train small decision models for ESP32-S3 camera boards."
 readme = "README.md"
 license = "Apache-2.0"

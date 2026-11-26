@@ -384,7 +384,9 @@ footer svg { height:14px; width:auto; border:1px solid var(--line); display:bloc
       <p class="note" style="margin-top:0">Upload a model package (<b>model.dcd</b> from <code>decidio teach</code> or <code>decidio export</code>). The board restarts with it. Rules you edited stay; ones that name questions the new model lacks are dropped.</p>
       <input type="file" id="modelFile" accept=".dcd"><button class="b" id="upModel">Upload model</button><div class="msg" id="modelMsg"></div></div>
     <div class="card"><h2>Firmware</h2>
-      <p class="note" style="margin-top:0">Upload <b>decidio_rt.bin</b> for this board. The model and all settings are kept.</p>
+      <p class="note" style="margin-top:0"><b>Check for updates</b> asks the decidio installer website for the newest firmware. If it is newer, <b>Install</b> downloads it over Wi-Fi, and the board restarts with it. After the restart, the board gives the new firmware to the other boards of the group. The model and all settings are kept. The board does not look for updates by itself.</p>
+      <div class="row"><button class="b" id="updCheck">Check for updates</button><button class="b" id="updGo" hidden>Install</button></div><div class="msg" id="updMsg"></div>
+      <p class="note">Or upload <b>decidio_rt.bin</b> for this board. The model and all settings are kept.</p>
       <input type="file" id="fwFile" accept=".bin"><button class="b" id="upFw">Update firmware</button><div class="msg" id="fwMsg"></div></div>
     <div class="card"><h2>Sensors</h2>
       <dl class="kv" id="sens"></dl>
@@ -772,6 +774,33 @@ async function upload(path, file, box, what) {
   if (r.ok) setTimeout(() => location.reload(), 15000);
 }
 $("upModel").onclick = () => upload("/api/model", $("modelFile").files[0], $("modelMsg"), "the model");
+// Check for updates: the board does the work in a task (update.c); the page asks for its state every second.
+async function updWatch() {
+  const m = $("updMsg");
+  for (let i = 0; i < 300; i++) {
+    let s; try { s = await api("/api/update"); } catch (e) { s = null; }
+    if (!s || s.error && !s.state) { say(m, true, "The board restarts with the new firmware. Reload this page in one minute."); return; }
+    if (s.state === "checking") say(m, true, "The board asks the installer website...");
+    else if (s.state === "downloading") say(m, true, "Downloading " + s.latest + ": " + Math.round(100 * s.got / (s.total || 1)) + " %");
+    else if (s.state === "restarting") { say(m, true, "Firmware " + s.latest + " is written. The board restarts now. Reload this page in one minute."); return; }
+    else if (s.state === "failed") { say(m, false, "Failed: " + s.error + "."); $("updCheck").disabled = false; return; }
+    else if (s.state === "checked") {
+      $("updCheck").disabled = false;
+      $("updGo").hidden = !s.newer; $("updGo").textContent = "Install " + s.latest;
+      say(m, true, s.newer ? "Firmware " + s.latest + " is available. This board has " + s.current + "." : "This board has the newest firmware, " + s.current + ".");
+      return;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+async function updStart(install) {
+  $("updCheck").disabled = true; $("updGo").hidden = true;
+  let r; try { r = await api("/api/update", { install }); } catch (e) { r = { error: "no answer from the board" }; }
+  if (!r.ok) { say($("updMsg"), false, "Failed: " + r.error + "."); $("updCheck").disabled = false; return; }
+  updWatch();
+}
+$("updCheck").onclick = () => updStart(false);
+$("updGo").onclick = () => updStart(true);
 $("upFw").onclick = () => upload("/api/firmware", $("fwFile").files[0], $("fwMsg"), "the firmware");
 $("reboot").onclick = async () => { await api("/api/reboot", {}); say($("sysMsg"), true, "Restarting..."); };
 $("forget").onclick = async () => { await api("/api/wifi", { forget: true }); say($("sysMsg"), true, "Forgotten. Join the board's own network (" + (info ? info.wifi.host : "") + ") to set it up again."); };

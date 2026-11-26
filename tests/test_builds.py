@@ -67,4 +67,5 @@ def test_make_builds(tmp_path):
             assert all((tmp_path / board / p["path"]).exists() for p in parts)
             assert parts[0]["path"] == "../firmware.bin", "every build shares the one firmware"
     assert (tmp_path / index["firmware"]).read_bytes() == builds.firmware_image()
+    assert (tmp_path / index["app"]).read_bytes()[:1] == bytes([0xE9])    # an app image, for the update button
     assert json.loads((tmp_path / "index.json").read_text()) == index
